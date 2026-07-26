@@ -42,6 +42,8 @@ public sealed class DxPlatformWebApplicationFactory : WebApplicationFactory<Prog
         {
             services.RemoveAll<IApplicationHealthCheckService>();
             services.AddSingleton<IApplicationHealthCheckService, StubHealthCheckService>();
+            services.RemoveAll<IHealthCheckTargetValidator>();
+            services.AddSingleton<IHealthCheckTargetValidator, StubHealthCheckTargetValidator>();
             services.Configure<BootstrapAdminOptions>(options =>
             {
                 options.Email = AdminEmail;
@@ -83,5 +85,19 @@ public sealed class DxPlatformWebApplicationFactory : WebApplicationFactory<Prog
                 200,
                 12,
                 null));
+    }
+
+    private sealed class StubHealthCheckTargetValidator : IHealthCheckTargetValidator
+    {
+        public Task<bool> IsAllowedAsync(
+            string? url,
+            CancellationToken cancellationToken = default) => Task.FromResult(true);
+
+        public Task<IReadOnlyList<System.Net.IPAddress>> GetAllowedAddressesAsync(
+            string host,
+            int port,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<System.Net.IPAddress>>(
+                [System.Net.IPAddress.Parse("203.0.113.10")]);
     }
 }

@@ -60,7 +60,7 @@
       "id": "dashboard",
       "name": "ダッシュボード",
       "type": "Authenticated MVC",
-      "description": "各資産数、直近配備、health概要への入口を提供する。",
+      "description": "共通閲覧資産数と、実効App権限でfilterしたApp KPI・直近配備への入口を提供する。",
       "source_files": ["src/DxPlatform.Web/Controllers/DashboardController.cs", "src/DxPlatform.Web/Views/Dashboard/Index.cshtml"]
     },
     {
@@ -101,8 +101,8 @@
     {
       "id": "operations",
       "name": "配備・稼働確認",
-      "type": "Authenticated MVC",
-      "description": "配備履歴を表示し、許可ロールが手動health checkを実行して結果を確認する。",
+      "type": "Resource-filtered authenticated MVC",
+      "description": "実効App権限でfilterした配備履歴を表示し、管理可能Appだけ手動health checkを実行・確認する。",
       "source_files": ["src/DxPlatform.Web/Controllers/DeploymentsController.cs", "src/DxPlatform.Web/Controllers/HealthChecksController.cs", "src/DxPlatform.Web/Views/HealthChecks/Index.cshtml"]
     },
     {
@@ -287,7 +287,7 @@
       "id": "database_initialization",
       "name": "Database initialization",
       "type": "Application startup task",
-      "description": "SQL Server migrationまたは開発SQLite schema作成後、固定roleと任意bootstrap admin、架空demo dataをseedする。",
+      "description": "Productionは承認済みSQL適用済みを検証し、開発SQLiteだけschemaを作成する。その後、固定roleと任意bootstrap admin、架空demo dataをseedする。",
       "inputs": ["provider", "connection string", "bootstrap settings", "environment"],
       "outputs": ["schema", "roles", "optional admin/demo records"],
       "source_files": ["src/DxPlatform.Infrastructure/Persistence/DatabaseInitializer.cs", "src/DxPlatform.Infrastructure/Persistence/Migrations/20260726090428_InitialSqlServer.cs"]
@@ -305,15 +305,15 @@
       "id": "health_targets",
       "name": "Registered application health URLs",
       "type": "Outbound HTTP(S)",
-      "description": "許可されたhttp/https URLへtimeout付きGETを送りstatus、latency、error summaryのみ保存する。",
-      "source_files": ["src/DxPlatform.Infrastructure/Operations/OperationalServices.cs", "src/DxPlatform.Application/Validation/UrlSafetyValidator.cs", "src/DxPlatform.Web/Controllers/HealthChecksController.cs"]
+      "description": "許可Host/Port/IPへredirectなしのtimeout付きGETを送りstatus、latency、error summaryのみ保存する。接続時DNS解決も再検査する。",
+      "source_files": ["src/DxPlatform.Infrastructure/Security/HealthCheckTargetValidator.cs", "src/DxPlatform.Infrastructure/Operations/OperationalServices.cs", "src/DxPlatform.Web/Controllers/HealthChecksController.cs"]
     },
     {
       "id": "github",
       "name": "GitHub / GitHub Actions",
       "type": "Source control and automation",
       "description": "branch/PR、Windows CI artifact、protected deployment workflowを提供する。",
-      "source_files": [".github/workflows/ci.yml", ".github/workflows/deploy-staging.yml", ".github/workflows/deploy-production.yml"]
+      "source_files": [".github/workflows/ci.yml", ".github/workflows/release.yml", ".github/workflows/deploy-staging.yml", ".github/workflows/deploy-production.yml"]
     },
     {
       "id": "iis",
@@ -349,15 +349,15 @@
       "id": "manual_health_check",
       "name": "手動health check",
       "type": "outbound observation",
-      "description": "許可ユーザー → health run → URL検証/cooldown → timeout付きHTTP GET → status/latency/error metadata保存 → audit/UI。response bodyは保存しない。",
-      "source_files": ["src/DxPlatform.Web/Controllers/HealthChecksController.cs", "src/DxPlatform.Infrastructure/Operations/OperationalServices.cs", "src/DxPlatform.Domain/Operations/OperationalEntities.cs"]
+      "description": "管理可能App確認 → Host/Port/DNS/IP検証/cooldown → 許可IPへredirectなしHTTP GET → status/latency/error metadata保存 → audit/UI。response bodyは保存しない。",
+      "source_files": ["src/DxPlatform.Web/Controllers/HealthChecksController.cs", "src/DxPlatform.Infrastructure/Security/HealthCheckTargetValidator.cs", "src/DxPlatform.Infrastructure/Operations/OperationalServices.cs"]
     },
     {
       "id": "delivery_flow",
       "name": "CI/CD flow",
       "type": "build and deployment",
-      "description": "Feature commit → CI restore/build/test/publish → reviewed main/manual dispatch → self-hosted runner → backup/replace/start → readiness smoke → success record、失敗時rollback/failure record。",
-      "source_files": [".github/workflows/ci.yml", ".github/workflows/deploy-staging.yml", "scripts/deploy-iis.ps1", "scripts/smoke-test.ps1"]
+      "description": "Feature commit → audit/build/test/migration検査 → checksum付き会社package/prerelease → reviewed main/manual dispatch → self-hosted runner → backup/replace/start → readiness smoke → success record、失敗時rollback。",
+      "source_files": [".github/workflows/ci.yml", ".github/workflows/release.yml", "scripts/build-company-package.ps1", "scripts/deploy-iis.ps1"]
     },
     {
       "id": "deployment_registration_flow",
@@ -435,10 +435,10 @@
     },
     {
       "id": "health_ssrf_scope",
-      "name": "health target network allowlist未実装",
-      "type": "security limitation",
-      "description": "URL scheme/userinfoは検証するが、会社network範囲に基づくDNS/IP allowlistは未確定。利用者を管理roleへ限定し、会社でegress policyを追加する。",
-      "source_files": ["src/DxPlatform.Application/Validation/UrlSafetyValidator.cs", "src/DxPlatform.Web/Controllers/HealthChecksController.cs", "docs/KNOWN_LIMITATIONS.md"]
+      "name": "health target会社allowlist入力待ち",
+      "type": "security handoff",
+      "description": "Host/Port/DNS/IP検証、private IP opt-in、redirect拒否は実装済み。会社は正確な対象値とegress Firewallを承認・入力する。",
+      "source_files": ["src/DxPlatform.Infrastructure/Security/HealthCheckTargetValidator.cs", "docs/COMPANY_ENVIRONMENT_INPUTS.md", "docs/KNOWN_LIMITATIONS.md"]
     },
     {
       "id": "manual_health_only",

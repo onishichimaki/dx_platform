@@ -1,3 +1,4 @@
+using System.Threading.RateLimiting;
 using DxPlatform.Application.Abstractions;
 using DxPlatform.Application.Security;
 using DxPlatform.Infrastructure;
@@ -7,8 +8,10 @@ using DxPlatform.Web.Logging;
 using DxPlatform.Web.Security;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -21,6 +24,42 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUserContext, HttpCurrentUserContext>();
 builder.Services.AddHealthChecks()
     .AddCheck<DatabaseReadyHealthCheck>("database", tags: ["ready"]);
+var dataProtection = builder.Services.AddDataProtection()
+    .SetApplicationName(
+        builder.Configuration["DataProtection:ApplicationName"] ?? "DxPlatform");
+var keyRingPath = builder.Configuration["DataProtection:KeyRingPath"];
+if (!string.IsNullOrWhiteSpace(keyRingPath))
+{
+    if (!OperatingSystem.IsWindows())
+    {
+        throw new InvalidOperationException(
+            "DataProtection__KeyRingPathのDPAPI保護はWindows環境で構成してください。");
+    }
+
+    dataProtection
+        .PersistKeysToFileSystem(new DirectoryInfo(keyRingPath))
+        .ProtectKeysWithDpapi();
+}
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("login", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 30,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0
+        }));
+    options.AddPolicy("deployment-api", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 60,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0
+        }));
+});
 
 builder.Services.ConfigureApplicationCookie(options =>
 {
@@ -70,6 +109,23 @@ if (!string.IsNullOrWhiteSpace(fileLogPath))
 
 var app = builder.Build();
 
+if (app.Environment.IsProduction())
+{
+    var allowedHosts = app.Configuration["AllowedHosts"];
+    if (string.IsNullOrWhiteSpace(allowedHosts) ||
+        allowedHosts.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Any(host => host == "*"))
+    {
+        throw new InvalidOperationException(
+            "ProductionではAllowedHostsに実際のポータルHost名を指定してください。'*'は使用できません。");
+    }
+    if (string.IsNullOrWhiteSpace(keyRingPath) || !Path.IsPathFullyQualified(keyRingPath))
+    {
+        throw new InvalidOperationException(
+            "ProductionではDataProtection__KeyRingPathにACL保護された絶対pathを指定してください。");
+    }
+}
+
 if (app.Environment.IsDevelopment())
 {
     app.UseDeveloperExceptionPage();
@@ -85,8 +141,10 @@ if (!app.Environment.IsEnvironment("Testing"))
     app.UseHttpsRedirection();
 }
 
+app.UseMiddleware<SecurityHeadersMiddleware>();
 app.UseStaticFiles();
 app.UseRouting();
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseAuthorization();

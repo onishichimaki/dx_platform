@@ -2,7 +2,7 @@
 
 ## CI
 
-`ci.yml`はpush/PRでWindows hosted Runnerを使い、Restore、Release Build、Unit/Integration Test、Publish、ZIP化、TRXとpublish artifact保存を行う。外部packageの既知脆弱性警告を確認し、新規code warningを0にする。
+`ci.yml`はpush/PRでWindows hosted Runnerを使い、NuGet audit、Release Build、Unit/Integration Test、Migration差分検査、会社用package生成、TRX/artifact保存を行う。`release.yml`はtagを同じ手順で再検証してGitHub prereleaseへchecksum付き成果物を公開する。
 
 ## SQL Server
 
@@ -19,7 +19,7 @@ dotnet ef migrations script --idempotent `
   --output artifacts/dxplatform-migrations.sql
 ```
 
-review済みscript適用または`dotnet ef database update --connection $env:...`を使う。connection stringをshell historyやActions logへechoしない。
+Productionはreview済みscriptをDBAが適用する。アプリの`Database__ApplyMigrationsOnStartup`はfalseとし、未適用なら起動を停止する。connection stringをshell historyやActions logへechoしない。
 
 ## IIS初期構成
 

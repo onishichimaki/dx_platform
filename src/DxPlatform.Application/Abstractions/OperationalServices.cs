@@ -1,3 +1,4 @@
+using System.Net;
 using DxPlatform.Domain.Enums;
 
 namespace DxPlatform.Application.Abstractions;
@@ -34,6 +35,25 @@ public interface IApplicationHealthCheckService
         CancellationToken cancellationToken = default);
 }
 
+public interface IHealthCheckTargetValidator
+{
+    Task<bool> IsAllowedAsync(
+        string? url,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<IPAddress>> GetAllowedAddressesAsync(
+        string host,
+        int port,
+        CancellationToken cancellationToken = default);
+}
+
+public interface IDnsResolver
+{
+    Task<IPAddress[]> GetHostAddressesAsync(
+        string host,
+        CancellationToken cancellationToken = default);
+}
+
 public interface IHealthCheckScheduler
 {
     Task ScheduleAsync(CancellationToken cancellationToken = default);
@@ -44,12 +64,17 @@ public interface IApplicationAccessService
     Task<PermissionLevel> GetLevelAsync(
         Guid applicationAssetId,
         string userId,
-        bool isSystemAdmin,
+        bool hasGlobalAccess,
         CancellationToken cancellationToken = default);
 
     Task<IReadOnlySet<Guid>> GetVisibleApplicationIdsAsync(
         string userId,
-        bool isSystemAdmin,
+        bool hasGlobalAccess,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlySet<Guid>> GetManageableApplicationIdsAsync(
+        string userId,
+        bool hasGlobalAccess,
         CancellationToken cancellationToken = default);
 }
 

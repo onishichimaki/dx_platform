@@ -2,6 +2,8 @@
 
 Repositoryには会社固有値を記録しない。実値、承認記録、担当者名は会社管理のticket/secret/configuration systemに置く。
 
+実作業は先に `COMPANY_SETUP_GUIDE.md` を読み、ReleaseのSHA-256とpackage内部checksumを確認してから本チェックリストを使用する。
+
 ## 1. Repository・governance
 
 - [ ] 個人GitHubから会社管理Repositoryへ履歴を保って移管する
@@ -27,6 +29,7 @@ Repositoryには会社固有値を記録しない。実値、承認記録、担�
 - [ ] application service account/DB userを作成し最小権限を付与する
 - [ ] encrypted connection stringをsecret store/IIS環境変数へ設定する
 - [ ] 全Migrationsの冪等SQLをDBA reviewする
+- [ ] `Database__ApplyMigrationsOnStartup=false`と未適用Migration時の起動停止を確認する
 - [ ] backup取得後にMigrationを実行する
 - [ ] table/index/unique/check/FK、timezone、collationを確認する
 - [ ] full/differential/log backupとrestore testを設定する
@@ -42,6 +45,10 @@ Repositoryには会社固有値を記録しない。実値、承認記録、担�
 - [ ] SSL certificate/binding/private-key ACL/更新手順を設定する
 - [ ] Hosting Bundle install後にIISを再起動/確認する
 - [ ] Production環境変数を設定し、SQLiteが指定されていないことを確認する
+- [ ] `AllowedHosts`が実Hostであり`*`でないことを確認する
+- [ ] Health CheckのHost/Port/private IP allowlistとegress Firewallを確認する
+- [ ] Data Protection key永続化、ACL、backup（複数nodeは共有key ring）を確認する
+- [ ] app pool identityでDPAPI keyを復号でき、account変更/復旧手順を試験する
 - [ ] `/health/live`と`/health/ready`をnetwork経路ごと確認する
 - [ ] request/log/recycle/idle timeout設定を会社基準へ合わせる
 
@@ -73,6 +80,7 @@ Repositoryには会社固有値を記録しない。実値、承認記録、担�
 - [ ] infrastructure/app/DB監視とon-call/escalationを設定する
 - [ ] backup retentionとrestore/rollback訓練を行う
 - [ ] vulnerability/patch/license review cadenceを決める
+- [ ] release checksum、manifest source commit、dependency inventory、OSS reviewを記録する
 - [ ] UATを実施し、role/permission/直接URL/disabled userを重点確認する
 - [ ] security review、privacy review、operation reviewを完了する
 - [ ] Production移行承認を得る

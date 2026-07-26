@@ -10,11 +10,13 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace DxPlatform.Web.Controllers;
 
 [ApiController]
 [AllowAnonymous]
+[EnableRateLimiting("deployment-api")]
 [Route("api/deployments")]
 public sealed class DeploymentApiController(
     AppDbContext dbContext,

@@ -28,7 +28,7 @@ public sealed class AppsController(
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
         var visibleIds = await accessService.GetVisibleApplicationIdsAsync(
             userId,
-            User.IsInRole(RoleNames.SystemAdmin),
+            HasGlobalApplicationAccess(),
             cancellationToken);
 
         var query = dbContext.ApplicationAssets.AsNoTracking()
@@ -124,7 +124,9 @@ public sealed class AppsController(
         accessService.GetLevelAsync(
             id,
             User.FindFirstValue(ClaimTypes.NameIdentifier)!,
-            User.IsInRole(RoleNames.SystemAdmin),
+            HasGlobalApplicationAccess(),
             cancellationToken);
-}
 
+    private bool HasGlobalApplicationAccess() =>
+        User.IsInRole(RoleNames.SystemAdmin) || User.IsInRole(RoleNames.CatalogAdmin);
+}

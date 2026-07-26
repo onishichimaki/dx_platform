@@ -3,7 +3,7 @@
 - external認証（AD/Entra/OIDC/SAML/LDAP）とMFAは未実装。MVPはinternal Identity password。
 - SQLiteはDevelopment/Test専用。SQL Server固有のperformance、collation、HA、backupは会社環境で追加検証する。
 - background定期Health監視はinterfaceのみ。manual実行と基盤Health endpointを提供し、正式監視は外部製品を使う。
-- Health URLはscheme/timeout/cooldownを制御するが、network/host allowlistは会社network確定後に追加する。
+- Health URLのHost/Port/IP allowlistは実装済みだが、会社側で対象Hostとprivate network許可を入力するまで実行不可。正式監視とegress Firewallは外部基盤を使う。
 - App以外のData/Agent catalogはMVPでは認証user共通閲覧。機密区分別ABACは将来課題。
 - tagは検索用textとEntityを持つが、正規化tag管理UIは未完成。
 - pagination/bulk import/export、自動metadata crawl、完全data lineageは未実装。件数増加前にquery/profileを行う。
@@ -14,3 +14,5 @@
 - file loggerは単一node向けの簡易JSON Lines。正式なrotation/central collectionは会社側で構成する。
 - accessibilityは基本focus/label/responsive/color非依存を実装したが、専門的WCAG監査は未実施。
 - 会社標準SQL Server、IIS、Production certificate、Runnerを使うend-to-end deployは会社環境でのみ完了できる。開発用SQL ServerではMigrationsとreadinessまで検証済み。
+- internal IdentityはMFA非対応で、rate limitは単一nodeのmemory内状態。load balancer配下のclient IP転送と分散rate limitは会社構成で追加検討する。
+- ReleaseはSHA-256 checksumとsource commitを提供するが、code signing/Sigstore等の独立したartifact署名は未実装。会社の署名基盤があれば追加する。

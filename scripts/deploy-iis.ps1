@@ -16,7 +16,7 @@ param(
     [string]$BackupPath,
 
     [Parameter(Mandatory)]
-    [ValidatePattern('^https?://')]
+    [ValidatePattern('^https://')]
     [string]$BaseUrl
 )
 
@@ -66,6 +66,10 @@ New-Item -ItemType Directory -Path $extractPath -Force | Out-Null
 
 try {
     Expand-Archive -LiteralPath $resolvedPackagePath -DestinationPath $extractPath -Force
+    if (-not (Test-Path -LiteralPath (Join-Path $extractPath 'DxPlatform.Web.dll') -PathType Leaf) -or
+        -not (Test-Path -LiteralPath (Join-Path $extractPath 'web.config') -PathType Leaf)) {
+        throw 'Package is not an IIS application artifact. DxPlatform.Web.dll or web.config is missing at the ZIP root.'
+    }
 
     if (Test-Path -LiteralPath $resolvedDeployPath -PathType Container) {
         $existing = Get-ChildItem -LiteralPath $resolvedDeployPath -Force

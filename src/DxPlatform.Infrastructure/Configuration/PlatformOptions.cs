@@ -4,6 +4,7 @@ public sealed class DatabaseOptions
 {
     public const string SectionName = "Database";
     public string Provider { get; set; } = "Sqlite";
+    public bool ApplyMigrationsOnStartup { get; set; }
 }
 
 public sealed class BootstrapAdminOptions
@@ -23,5 +24,7 @@ public sealed class HealthCheckOptions
 {
     public const string SectionName = "HealthChecks";
     public int TimeoutSeconds { get; set; } = 10;
+    public List<string> AllowedHosts { get; set; } = [];
+    public List<int> AllowedPorts { get; set; } = [443];
+    public bool AllowPrivateAddresses { get; set; }
 }
-

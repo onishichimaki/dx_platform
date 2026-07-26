@@ -22,6 +22,11 @@
 - manual Health result保存（外部networkをstub）。
 - `/health/live`、`/health/ready`。
 - Deployment APIのunauthorized拒否、Bearer token成功、履歴/audit保存。
+- AppOwnerのHealth対象・履歴・直接POSTが所有/Manage Appに限定されること。
+- ViewerのDashboard/Deployment履歴に未許可App名が表示されないこと。
+- CSP、frame/MIME/referrer等のsecurity response header。
+- Deployment APIのburstが429で制限されること。
+- Health targetのHost/Port/IP policy（loopback、metadata、private opt-in）。
 
 Integration Testは一時SQLite file、実Identity cookie、anti-forgery tokenを使う。test password/tokenは明示的なtest-only値で、本物のsecretではない。外部HTTP、会社system、SQL Server実DBへ依存しない。
 
@@ -40,7 +45,8 @@ Integration Testは一時SQLite file、実Identity cookie、anti-forgery token�
 dotnet restore DxPlatform.slnx
 dotnet build DxPlatform.slnx --no-restore
 dotnet test DxPlatform.slnx --no-build --logger "trx"
-dotnet publish src/DxPlatform.Web/DxPlatform.Web.csproj -c Release --no-restore
+dotnet ef migrations has-pending-model-changes --project src/DxPlatform.Infrastructure --startup-project src/DxPlatform.Web --configuration Release --no-build
+.\scripts\build-company-package.ps1 -Version 0.1.0-rc1
 ```
 
 warning、failed/skipped test、vulnerability、secret scan、untracked outputを確認する。CIはUnit/IntegrationのTRXを別artifactとして保存する。

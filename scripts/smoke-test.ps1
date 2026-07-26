@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)]
-    [ValidatePattern('^https?://')]
+    [ValidatePattern('^https://')]
     [string]$BaseUrl,
 
     [ValidateRange(1, 120)]
