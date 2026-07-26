@@ -13,10 +13,17 @@ public sealed class ApplicationAccessService(
     public async Task<PermissionLevel> GetLevelAsync(
         Guid applicationAssetId,
         string userId,
-        bool isSystemAdmin,
+        bool hasGlobalAccess,
         CancellationToken cancellationToken = default)
     {
-        if (isSystemAdmin)
+        if (hasGlobalAccess)
+        {
+            return PermissionLevel.Manage;
+        }
+
+        if (await dbContext.ApplicationAssets.AnyAsync(
+                x => x.IsActive && x.Id == applicationAssetId && x.OwnerUserId == userId,
+                cancellationToken))
         {
             return PermissionLevel.Manage;
         }
@@ -44,10 +51,10 @@ public sealed class ApplicationAccessService(
 
     public async Task<IReadOnlySet<Guid>> GetVisibleApplicationIdsAsync(
         string userId,
-        bool isSystemAdmin,
+        bool hasGlobalAccess,
         CancellationToken cancellationToken = default)
     {
-        if (isSystemAdmin)
+        if (hasGlobalAccess)
         {
             return (await dbContext.ApplicationAssets
                     .Where(x => x.IsActive)
@@ -56,14 +63,20 @@ public sealed class ApplicationAccessService(
                 .ToHashSet();
         }
 
-        var candidateIds = await dbContext.ApplicationPermissions
+        var permissionIds = dbContext.ApplicationPermissions
             .Where(x => x.IsActive &&
+                        x.ApplicationAsset.IsActive &&
                         (x.UserId == userId ||
                          (x.GroupId.HasValue && dbContext.GroupMembers.Any(member =>
                              member.IsActive && member.UserId == userId &&
                              member.GroupId == x.GroupId && member.Group.IsActive))))
             .Select(x => x.ApplicationAssetId)
-            .Distinct()
+            .Distinct();
+        var ownerIds = dbContext.ApplicationAssets
+            .Where(x => x.IsActive && x.OwnerUserId == userId)
+            .Select(x => x.Id);
+        var candidateIds = await permissionIds
+            .Union(ownerIds)
             .ToListAsync(cancellationToken);
 
         var visible = new HashSet<Guid>();
@@ -77,5 +90,30 @@ public sealed class ApplicationAccessService(
 
         return visible;
     }
-}
 
+    public async Task<IReadOnlySet<Guid>> GetManageableApplicationIdsAsync(
+        string userId,
+        bool hasGlobalAccess,
+        CancellationToken cancellationToken = default)
+    {
+        var visibleIds = await GetVisibleApplicationIdsAsync(
+            userId,
+            hasGlobalAccess,
+            cancellationToken);
+        if (hasGlobalAccess)
+        {
+            return visibleIds;
+        }
+
+        var manageable = new HashSet<Guid>();
+        foreach (var id in visibleIds)
+        {
+            if (await GetLevelAsync(id, userId, false, cancellationToken) >= PermissionLevel.Manage)
+            {
+                manageable.Add(id);
+            }
+        }
+
+        return manageable;
+    }
+}

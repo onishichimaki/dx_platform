@@ -23,7 +23,7 @@
 
 ## manual Health Check
 
-管理menuの稼働確認から実行する。同一Appは30秒に1回まで、timeoutは1–60秒の設定範囲である。response bodyを保存しない。失敗時は対象側のHealth endpoint、network/firewall、certificate、DNSを確認する。定期監視は未実装なので会社監視製品を正式監視にする。
+管理menuの稼働確認から実行する。System/Catalog Adminは全App、AppOwnerは所有またはManage権限Appだけを実行・閲覧できる。同一Appは30秒に1回まで、timeoutは1–60秒で、response bodyとredirect先は取得しない。失敗時はHost/Port allowlist、private address設定、対象Health endpoint、network/firewall、certificate、DNSを確認する。定期監視は未実装なので会社監視製品を正式監視にする。
 
 ## log/監査
 
@@ -46,4 +46,3 @@
 3. 必要なら承認済みbackup pathを指定して`rollback-iis.ps1`を実行。
 4. `/health/ready`、login、主要catalogを確認。
 5. 原因、影響、commit、run、rollback、再発防止を監査可能な場所へ記録。
-

@@ -37,9 +37,27 @@ public static class DatabaseInitializer
         {
             await dbContext.Database.EnsureCreatedAsync(cancellationToken);
         }
-        else
+        else if (configuration.GetValue(
+                     $"{DatabaseOptions.SectionName}:ApplyMigrationsOnStartup",
+                     seedDemoData))
         {
             await dbContext.Database.MigrateAsync(cancellationToken);
+        }
+        else
+        {
+            if (!await dbContext.Database.CanConnectAsync(cancellationToken))
+            {
+                throw new InvalidOperationException(
+                    "SQL Serverへ接続できません。接続文字列、Firewall、サービスアカウント権限を確認してください。");
+            }
+
+            var pendingMigrations = await dbContext.Database
+                .GetPendingMigrationsAsync(cancellationToken);
+            if (pendingMigrations.Any())
+            {
+                throw new InvalidOperationException(
+                    "未適用のDB Migrationがあります。会社承認済みのidempotent SQLをDB管理者が適用してから起動してください。");
+            }
         }
 
         await SeedRolesAndAdminAsync(scope.ServiceProvider, logger, cancellationToken);

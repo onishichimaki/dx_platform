@@ -97,7 +97,8 @@ Unit Testは権限競合、ロール、無効ユーザー、URL、状態遷移�
 
 ## GitHub Actions
 
-- `ci.yml`: Restore、Release Build、Unit/Integration Test、Publish、ZIP、TRX/artifact保存。
+- `ci.yml`: Restore/audit、Release Build、Unit/Integration Test、Migration差分検査、会社用ZIP、TRX/artifact保存。
+- `release.yml`: tagを再検証し、checksum・Migration SQL・依存関係一覧付きGitHub prereleaseを公開。
 - `deploy-staging.yml`: `ENABLE_STAGING_DEPLOY=true`かつWindows Self-hosted Runner設定時だけ実行。
 - `deploy-production.yml`: `workflow_dispatch`とGitHub `production` Environment承認を前提に手動実行。
 - deploy scriptは配置前バックアップ、IIS停止/開始、Smoke Test、失敗時rollbackを行います。
@@ -106,15 +107,21 @@ Unit Testは権限競合、ロール、無効ユーザー、URL、状態遷移�
 
 ## 会社で差し替える箇所
 
-SQL Server接続、URL、IIS site/app pool/配置・backup path、SSL証明書、GitHub Organization/Environment/Runner/Secrets、通知、実データ、ユーザー/権限、会社承認済み.NET版を差し替えます。順序付きの手順は `docs/HANDOFF_TO_COMPANY.md`、入力値一覧は `docs/COMPANY_ENVIRONMENT_INPUTS.md`を参照してください。
+SQL Server接続、URL、IIS site/app pool/配置・backup path、SSL証明書、GitHub Organization/Environment/Runner/Secrets、通知、実データ、ユーザー/権限、会社承認済み.NET版を差し替えます。downloadから構築までの順序は `docs/COMPANY_SETUP_GUIDE.md`、判定表は `docs/HANDOFF_TO_COMPANY.md`、入力値一覧は `docs/COMPANY_ENVIRONMENT_INPUTS.md`を参照してください。
+
+会社持込み用packageは次で再生成できます。生成物は `artifacts/company/release` に出力され、Git管理されません。
+
+```powershell
+.\scripts\build-company-package.ps1 -Version 0.1.0-rc1 -DotNetPath .\.dotnet\dotnet.exe
+```
 
 ## セキュリティ上の注意
 
 - 初期管理者、接続文字列、Deployment tokenをファイルへ保存しないでください。
-- 外部URLはHTTP/HTTPSだけを許可し、アプリ詳細・起動時に権限を再判定します。
+- 外部URLはHTTP/HTTPSだけを許可し、アプリ詳細・起動時に権限を再判定します。Health CheckはHost/Port/IP allowlist、接続時DNS再検査、redirect拒否を追加しています。
 - `None`の個人権限はグループ許可より優先します。
 - Audit/File logへパスワード、Token、Cookie、接続文字列、入力全文を記録しません。
 - 本物のSystem Prompt、API key、認証情報、任意scriptは登録・実行できません。
-- ProductionはHTTPS/HSTS、Secure/HttpOnly cookie、SQL Serverを必須とします。
+- ProductionはHTTPS/HSTS、Secure/HttpOnly cookie、SQL Server、具体的な`AllowedHosts`を必須とし、DB Migrationを自動適用しません。
 
 詳細は `docs/SECURITY.md`、既知制限は `docs/KNOWN_LIMITATIONS.md`を参照してください。

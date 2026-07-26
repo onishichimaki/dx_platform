@@ -8,6 +8,7 @@ on:
       - 'feature/**'
       - 'fix/**'
       - 'docs/**'
+      - 'agent/**'
   pull_request:
 
 permissions:
@@ -32,7 +33,10 @@ jobs:
             Directory.Packages.props
 
       - name: Restore
-        run: dotnet restore DxPlatform.slnx
+        run: dotnet restore DxPlatform.slnx -p:NuGetAudit=true -p:NuGetAuditMode=all
+
+      - name: Dependency vulnerability report
+        run: dotnet list DxPlatform.slnx package --vulnerable --include-transitive
 
       - name: Build
         run: dotnet build DxPlatform.slnx -c Release --no-restore
@@ -51,15 +55,14 @@ jobs:
           --logger "trx;LogFileName=integration-tests.trx"
           --results-directory artifacts/test-results/integration
 
-      - name: Publish
-        run: >
-          dotnet publish src/DxPlatform.Web/DxPlatform.Web.csproj
-          -c Release --no-restore
-          -o artifacts/publish
+      - name: Verify EF model matches migrations
+        run: |
+          dotnet tool restore
+          dotnet ef migrations has-pending-model-changes --project src/DxPlatform.Infrastructure --startup-project src/DxPlatform.Web --configuration Release --no-build
 
-      - name: Create ZIP artifact
+      - name: Build company package
         shell: pwsh
-        run: Compress-Archive -Path artifacts/publish/* -DestinationPath artifacts/dx-platform.zip -Force
+        run: ./scripts/build-company-package.ps1 -Version "0.1.0-ci-${{ github.run_number }}" -NoRestore
 
       - name: Upload test results
         if: always()
@@ -72,7 +75,6 @@ jobs:
       - name: Upload publish artifact
         uses: actions/upload-artifact@v7
         with:
-          name: dx-platform-publish
-          path: artifacts/dx-platform.zip
+          name: dx-platform-company-package
+          path: artifacts/company/release/*
           if-no-files-found: error
-

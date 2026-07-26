@@ -6,8 +6,15 @@
 - Policy/role/resource level認可、既定拒否、直接URL再判定。
 - MVC anti-forgery、Razor output encoding、DataAnnotations、EF Core parameter化query。
 - HTTP/HTTPSだけを許可するURL validator。userinfo付きURL、javascript/data schemeを拒否。
+- Health Checkはexact/wildcard-subdomain Host allowlist、Port allowlist、IP分類を検証する。loopback、link-local、metadata/benchmark/multicastを常時拒否し、private addressは明示設定時だけ許可。
+- Health Check接続時にもDNSを再解決して許可IPへ直接接続し、HTTP redirectとcookieを拒否する。
+- Dashboard、Deployment履歴、Health実行・履歴をApp resource権限でfilterし、AppOwnerは所有Appだけを管理する。
+- CSP、frame拒否、MIME sniff拒否、referrer/permissions policyを全responseへ付与する。
+- loginとDeployment APIにIP単位のrate limitを付与する。
 - ProductionのHTTPS redirect、HSTS、Secure/HttpOnly/SameSite cookie、developer exception無効。
 - ProductionでSQLiteまたは接続文字列未設定なら起動失敗。
+- Productionは`AllowedHosts=*`を拒否し、未適用Migrationがあれば起動を停止する。schema自動更新は既定無効。
+- Productionは絶対pathのData Protection key ringを必須とし、Windows DPAPIでapp pool identityに保護する。
 - Correlation IDを安全な文字と長さに制限し、response headerとlog scopeへ付与。
 - Deployment API tokenを設定file/DB/logへ保存せず、SHA-256 hashを固定時間比較。
 - ConnectionReferenceへconnection string/passwordらしい値を拒否。
@@ -30,10 +37,9 @@ Consoleと日次JSON line file providerを用意し、Timestamp、level、event�
 ## Threatと残余risk
 
 - internal account漏えい: strong password、lockout、最小role、定期棚卸しで軽減。MFA/Entra IDは将来範囲。
-- SSRF: Health URLはadmin登録、scheme制限、manual実行、timeout/cooldown。ただしhost allowlistは会社network確定後に追加が必要。
+- SSRF: allowlist、private IP opt-in、接続時再検査、redirect拒否、timeout/cooldownで軽減。会社では正確なHost/Portとegress Firewallを設定する。
 - XSS: Razor encodeと入力長。external linkは`noopener noreferrer`。
 - SQL injection: LINQ/EF parameter化。任意SQL機能なし。
 - deployment改ざん: GitHub Environment approval、protected branch、self-hosted Runner管理、artifact/commit SHAで軽減。署名artifact検証は将来課題。
 
 security incident時はtoken/password/certificateを先にrotateし、audit/log、GitHub Actions、IIS、SQL Server access logをCorrelation ID/commit/run IDで照合する。
-

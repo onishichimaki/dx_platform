@@ -32,6 +32,12 @@ $resolvedBackupSource = Resolve-SafeDeploymentPath -Path $BackupSource -Label 'B
 if ($resolvedDeployPath -eq $resolvedBackupSource) {
     throw 'DeployPath and BackupSource must be different.'
 }
+$deployPrefix = $resolvedDeployPath + [System.IO.Path]::DirectorySeparatorChar
+$backupPrefix = $resolvedBackupSource + [System.IO.Path]::DirectorySeparatorChar
+if ($resolvedBackupSource.StartsWith($deployPrefix, [StringComparison]::OrdinalIgnoreCase) -or
+    $resolvedDeployPath.StartsWith($backupPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+    throw 'DeployPath and BackupSource must not contain one another.'
+}
 if (-not (Test-Path -LiteralPath $resolvedBackupSource -PathType Container)) {
     throw "BackupSource was not found: $resolvedBackupSource"
 }

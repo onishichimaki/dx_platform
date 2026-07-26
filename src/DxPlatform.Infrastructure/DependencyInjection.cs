@@ -1,3 +1,4 @@
+using System.Net.Sockets;
 using DxPlatform.Application.Abstractions;
 using DxPlatform.Application.Security;
 using DxPlatform.Application.Validation;
@@ -89,10 +90,52 @@ public static class DependencyInjection
 
         services.AddScoped<IApplicationPermissionEvaluator, ApplicationPermissionEvaluator>();
         services.AddSingleton<IUrlSafetyValidator, UrlSafetyValidator>();
+        services.AddSingleton<IDnsResolver, SystemDnsResolver>();
+        services.AddSingleton<IHealthCheckTargetValidator, HealthCheckTargetValidator>();
         services.AddScoped<IApplicationAccessService, ApplicationAccessService>();
         services.AddScoped<IAuditService, AuditService>();
         services.AddHttpClient<IApplicationHealthCheckService, ApplicationHealthCheckService>()
-            .ConfigureHttpClient(client => client.DefaultRequestHeaders.UserAgent.ParseAdd("DxPlatform-HealthCheck/1.0"));
+            .ConfigureHttpClient(client => client.DefaultRequestHeaders.UserAgent.ParseAdd("DxPlatform-HealthCheck/1.0"))
+            .ConfigurePrimaryHttpMessageHandler(serviceProvider =>
+            {
+                var targetValidator = serviceProvider.GetRequiredService<IHealthCheckTargetValidator>();
+                return new SocketsHttpHandler
+                {
+                    AllowAutoRedirect = false,
+                    UseCookies = false,
+                    ConnectCallback = async (context, cancellationToken) =>
+                    {
+                        var addresses = await targetValidator.GetAllowedAddressesAsync(
+                            context.DnsEndPoint.Host,
+                            context.DnsEndPoint.Port,
+                            cancellationToken);
+                        Exception? lastException = null;
+                        foreach (var address in addresses)
+                        {
+                            var socket = new Socket(
+                                address.AddressFamily,
+                                SocketType.Stream,
+                                ProtocolType.Tcp);
+                            try
+                            {
+                                await socket.ConnectAsync(
+                                    new System.Net.IPEndPoint(address, context.DnsEndPoint.Port),
+                                    cancellationToken);
+                                return new NetworkStream(socket, ownsSocket: true);
+                            }
+                            catch (Exception exception) when (exception is SocketException or IOException)
+                            {
+                                lastException = exception;
+                                socket.Dispose();
+                            }
+                        }
+
+                        throw new HttpRequestException(
+                            "Health check target is not allowed or could not be reached.",
+                            lastException);
+                    }
+                };
+            });
         services.AddSingleton<IHealthCheckScheduler, ManualOnlyHealthCheckScheduler>();
 
         return services;

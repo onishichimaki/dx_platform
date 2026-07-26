@@ -4,6 +4,7 @@ using DxPlatform.Web.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace DxPlatform.Web.Controllers;
 
@@ -25,6 +26,7 @@ public sealed class AccountController(
     }
 
     [AllowAnonymous]
+    [EnableRateLimiting("login")]
     [ValidateAntiForgeryToken]
     [HttpPost("/login")]
     public async Task<IActionResult> Login(

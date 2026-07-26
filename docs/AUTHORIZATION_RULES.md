@@ -15,7 +15,7 @@ Controller policyを必須とし、Viewのmenu/ボタン非表示は補助に過
 
 ## App権限評価
 
-1. SystemAdminなら`Manage`。
+1. SystemAdmin/CatalogAdminが全Appを扱う画面では`Manage`。owner登録されたuserは対象Appを`Manage`。
 2. user個別`None`があれば拒否。groupのManageより優先。
 3. user個別許可があればそのlevel。
 4. user個別設定がなければ、有効groupの最大level。
@@ -26,6 +26,8 @@ Controller policyを必須とし、Viewのmenu/ボタン非表示は補助に過
 ## 一覧と直接URL
 
 `/apps`は評価結果がView以上のIDだけをqueryする。`/apps/{id}`と`/apps/{id}/launch`はID取得後に再評価し、権限不足ならForbidする。したがって一覧非表示だけではなくURL直打ちも拒否する。無効Appは一般routeではNotFoundになる。
+
+DashboardのApp KPI/直近Deployment、`/deployments`のfilter候補と履歴、`/admin/health-checks`の対象と履歴にも同じresource filterを適用する。AppOwnerのHealth操作はownerまたはManage権限Appだけで、ID直打ちはForbidする。Data/Agent全体KPIはMVPの認証user共通閲覧範囲である。
 
 ## 管理route
 
@@ -39,4 +41,3 @@ Controller policyを必須とし、Viewのmenu/ボタン非表示は補助に過
 | `POST /api/deployments` | Identity cookieではなく専用Bearer token |
 
 すべての状態変更formはPOSTとanti-forgery tokenを使用する。Deployment APIはmachine-to-machine endpointのためCSRF対象外だが、設定済みtokenの固定時間hash比較を必須とする。
-

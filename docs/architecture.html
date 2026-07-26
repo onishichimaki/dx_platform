@@ -83,7 +83,7 @@
 
   <section id="risks" class="pane"><div class="grid">
     <div class="card"><span class="badge amber">Identity</span><h3>SSO/MFA未確定</h3><p>MVPは内部Identity。会社IdPのtenant/claim/group mappingが次のdecision gate。</p></div>
-    <div class="card"><span class="badge red">Security</span><h3>health allowlist</h3><p>scheme/userinfo検証は実装済み。会社networkに基づくDNS/IP egress allowlistは未確定。</p></div>
+    <div class="card"><span class="badge amber">Company input</span><h3>health allowlist</h3><p>Host/Port/DNS/IP検証とredirect拒否は実装済み。会社の正確な対象値とegress Firewallは未確定。</p></div>
     <div class="card"><span class="badge amber">Database</span><h3>Provider差異</h3><p>CIはSQLite中心。SQL Server migration rehearsalをrelease gateにする。</p></div>
     <div class="card"><span class="badge amber">Operations</span><h3>定期監視なし</h3><p>MVPのhealth checkは手動。scheduler/notificationはroadmap。</p></div>
     <div class="card"><span class="badge amber">Delivery</span><h3>IIS topology未確定</h3><p>runner/site/path/TLS/ACL/proxyを会社stagingで承認する。</p></div>
@@ -105,7 +105,7 @@ contracts:{kind:"Application",title:"Operational contracts",text:"audit、health
 domain:{kind:"Domain",title:"Asset domain",text:"Application、Data、Agent、Tool、Group、Tag、Deployment、Health、Auditと関係を表現する。",src:["src/DxPlatform.Domain/Applications/ApplicationAsset.cs","src/DxPlatform.Domain/DataAssets/DataAsset.cs","src/DxPlatform.Domain/Agents/AgentAsset.cs","src/DxPlatform.Domain/Operations/OperationalEntities.cs"]},
 ef:{kind:"Infrastructure",title:"EF Core / Identity stores",text:"共通AppDbContextをSQL ServerとSQLite providerへ接続し、migration/seedを実行する。",src:["src/DxPlatform.Infrastructure/Persistence/AppDbContext.cs","src/DxPlatform.Infrastructure/Persistence/DatabaseInitializer.cs","src/DxPlatform.Infrastructure/DependencyInjection.cs"]},
 audit:{kind:"Infrastructure",title:"Audit & health services",text:"最小限のactor/action/target/result/correlationと、bodyを含まないhealth observationを保存する。",src:["src/DxPlatform.Infrastructure/Operations/OperationalServices.cs","src/DxPlatform.Domain/Operations/OperationalEntities.cs"]},
-sql:{kind:"Database",title:"SQL Server（本番）",text:"本番必須provider。接続値はenvironment/secretから注入し、Migrationsでschemaを管理する。",src:["src/DxPlatform.Infrastructure/DependencyInjection.cs","src/DxPlatform.Infrastructure/Persistence/Migrations/20260726090428_InitialSqlServer.cs","src/DxPlatform.Infrastructure/Persistence/Migrations/20260726093846_AddIdentityAuditMetadata.cs","docs/COMPANY_COMPATIBILITY_CHECKLIST.md"]},
+sql:{kind:"Database",title:"SQL Server（本番）",text:"本番必須provider。接続値はsecretから注入し、承認済み冪等SQLをDBAが適用する。アプリは未適用Migration時に停止する。",src:["src/DxPlatform.Infrastructure/Persistence/DatabaseInitializer.cs","scripts/build-company-package.ps1","docs/COMPANY_SETUP_GUIDE.md"]},
 sqlite:{kind:"Database",title:"SQLite（開発・test）",text:"local developmentとintegration test用。本番で選択すると起動に失敗する。",src:["src/DxPlatform.Infrastructure/DependencyInjection.cs","src/DxPlatform.Web/appsettings.Development.json","tests/DxPlatform.IntegrationTests/DxPlatformWebApplicationFactory.cs"]},
 account:{kind:"Screen",title:"Account screens",text:"login、logout、password change、access denied。",src:["src/DxPlatform.Web/Controllers/AccountController.cs","src/DxPlatform.Web/Views/Account/Login.cshtml"]},
 apps:{kind:"Screen",title:"Application catalog",text:"Read権限以上のassetを一覧/詳細表示し、launch直前にも権限とURLを再検査する。",src:["src/DxPlatform.Web/Controllers/AppsController.cs","src/DxPlatform.Web/Views/Apps/Index.cshtml"]},
@@ -120,7 +120,7 @@ iis:{kind:"Hosting",title:"Windows Server / IIS",text:"配備前backup、stop、
 staging:{kind:"CD",title:"Staging deployment",text:"enable variableで明示的に有効化したself-hosted runner workflow。",src:[".github/workflows/deploy-staging.yml"]},
 production:{kind:"CD",title:"Production deployment",text:"manual version inputとGitHub protected Environment approvalを前提とする。",src:[".github/workflows/deploy-production.yml"]},
 github:{kind:"External",title:"GitHub",text:"source control、PR、Actions、Environment secrets/variables、artifactを提供する。",src:[".github/workflows/ci.yml","docs/DEPLOYMENT.md"]},
-targets:{kind:"External",title:"Registered health targets",text:"管理roleだけが手動実行できるoutbound HTTP(S)。timeout/cooldownを適用しbodyは保存しない。",src:["src/DxPlatform.Infrastructure/Operations/OperationalServices.cs","src/DxPlatform.Web/Controllers/HealthChecksController.cs","docs/SECURITY.md"]}
+targets:{kind:"External",title:"Registered health targets",text:"管理可能Appだけ手動実行できるoutbound HTTP(S)。Host/Port/IP、接続時DNS、redirect拒否、timeout/cooldownを適用しbodyは保存しない。",src:["src/DxPlatform.Infrastructure/Security/HealthCheckTargetValidator.cs","src/DxPlatform.Web/Controllers/HealthChecksController.cs","docs/SECURITY.md"]}
 };
 function select(id){const x=items[id];if(!x)return;document.querySelectorAll('[data-id]').forEach(n=>n.classList.toggle('selected',n.dataset.id===id));document.getElementById('detail').innerHTML=`<span class="kind">${x.kind}</span><h3>${x.title}</h3><p>${x.text}</p><b>Source evidence</b><ul class="sources">${x.src.map(s=>`<li>${s}</li>`).join('')}</ul>`}
 document.querySelectorAll('[data-id]').forEach(n=>n.addEventListener('click',()=>select(n.dataset.id)));

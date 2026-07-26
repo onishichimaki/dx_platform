@@ -1,7 +1,6 @@
 using System.Security.Claims;
 using DxPlatform.Application.Abstractions;
 using DxPlatform.Application.Security;
-using DxPlatform.Application.Validation;
 using DxPlatform.Domain.Enums;
 using DxPlatform.Domain.Operations;
 using DxPlatform.Infrastructure.Configuration;
@@ -18,7 +17,8 @@ namespace DxPlatform.Web.Controllers;
 public sealed class HealthChecksController(
     AppDbContext dbContext,
     IApplicationHealthCheckService healthCheckService,
-    IUrlSafetyValidator urlValidator,
+    IHealthCheckTargetValidator targetValidator,
+    IApplicationAccessService accessService,
     IOptions<HealthCheckOptions> options,
     IAuditService auditService,
     ILogger<HealthChecksController> logger) : Controller
@@ -32,12 +32,14 @@ public sealed class HealthChecksController(
     [HttpGet("")]
     public async Task<IActionResult> Index(CancellationToken cancellationToken)
     {
+        var manageableIds = await GetManageableIdsAsync(cancellationToken);
         ViewBag.Applications = await dbContext.ApplicationAssets.AsNoTracking()
-            .Where(x => x.IsActive && x.HealthCheckUrl != null)
+            .Where(x => x.IsActive && x.HealthCheckUrl != null && manageableIds.Contains(x.Id))
             .OrderBy(x => x.Name)
             .ToListAsync(cancellationToken);
         return View(await dbContext.HealthCheckResults.AsNoTracking()
             .Include(x => x.ApplicationAsset)
+            .Where(x => manageableIds.Contains(x.ApplicationAssetId))
             .OrderByDescending(x => x.CheckedAt)
             .Take(100)
             .ToListAsync(cancellationToken));
@@ -49,6 +51,12 @@ public sealed class HealthChecksController(
         Guid applicationId,
         CancellationToken cancellationToken)
     {
+        var manageableIds = await GetManageableIdsAsync(cancellationToken);
+        if (!manageableIds.Contains(applicationId))
+        {
+            return Forbid();
+        }
+
         var app = await dbContext.ApplicationAssets
             .SingleOrDefaultAsync(x => x.Id == applicationId && x.IsActive, cancellationToken);
         if (app is null)
@@ -56,9 +64,9 @@ public sealed class HealthChecksController(
             return NotFound();
         }
 
-        if (!urlValidator.IsSafeHttpUrl(app.HealthCheckUrl, allowEmpty: false))
+        if (!await targetValidator.IsAllowedAsync(app.HealthCheckUrl, cancellationToken))
         {
-            TempData["ErrorMessage"] = "安全なヘルスチェックURLが登録されていません。";
+            TempData["ErrorMessage"] = "ヘルスチェックURLが会社許可リストまたはネットワーク安全条件を満たしていません。";
             return RedirectToAction(nameof(Index));
         }
 
@@ -106,5 +114,16 @@ public sealed class HealthChecksController(
             null);
         TempData["StatusMessage"] = $"ヘルスチェックを実行しました: {result.Status}";
         return RedirectToAction(nameof(Index));
+    }
+
+    private Task<IReadOnlySet<Guid>> GetManageableIdsAsync(CancellationToken cancellationToken)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+        var hasGlobalAccess = User.IsInRole(RoleNames.SystemAdmin) ||
+                              User.IsInRole(RoleNames.CatalogAdmin);
+        return accessService.GetManageableApplicationIdsAsync(
+            userId,
+            hasGlobalAccess,
+            cancellationToken);
     }
 }
