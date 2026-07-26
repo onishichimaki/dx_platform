@@ -1,0 +1,47 @@
+# Build outputs
+[Bb]in/
+[Oo]bj/
+artifacts/
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+
+# Local SDK and tools
+.dotnet/
+.tools/
+
+# IDE and OS files
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+.DS_Store
+Thumbs.db
+
+# Local databases and logs
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+logs/
+*.log
+
+# Secrets and environment-specific configuration
+.env
+.env.*
+!.env.example
+appsettings.Production.json
+secrets.json
+*.pfx
+*.p12
+*.key
+*.pem
+
+# Publish/deployment working folders
+publish/
+deploy/
+backups/
+
