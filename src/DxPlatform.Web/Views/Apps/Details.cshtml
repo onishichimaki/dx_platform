@@ -1,0 +1,37 @@
+@model ApplicationAsset
+@{
+    ViewData["Title"] = "アプリ詳細";
+    var level = (PermissionLevel)ViewBag.PermissionLevel;
+    var dataAssets = ViewBag.RelatedDataAssets as IEnumerable<DataAsset> ?? Enumerable.Empty<DataAsset>();
+    var healthChecks = ViewBag.HealthChecks as IEnumerable<HealthCheckResult> ?? Enumerable.Empty<HealthCheckResult>();
+    var deployments = ViewBag.Deployments as IEnumerable<Deployment> ?? Enumerable.Empty<Deployment>();
+}
+<div class="d-flex justify-content-between align-items-start mb-3">
+    <div><h1 class="h2">@Model.Name</h1><p class="text-secondary"><code>@Model.Code</code> / @Model.AssetType / @Model.Status</p></div>
+    <div class="d-flex gap-2">
+        @if (level >= PermissionLevel.Manage) { <a class="btn btn-outline-secondary" asp-controller="AdminApps" asp-action="Edit" asp-route-id="@Model.Id">編集</a> }
+        @if (level >= PermissionLevel.Use && !string.IsNullOrWhiteSpace(Model.Url)) { <a class="btn btn-primary" asp-action="Launch" asp-route-id="@Model.Id" target="_blank" rel="noopener noreferrer">アプリを開く <span class="visually-hidden">（新しいタブ）</span></a> }
+    </div>
+</div>
+<div class="row g-3">
+    <div class="col-lg-8">
+        <section class="form-section"><h2 class="h4">基本情報</h2><dl class="row detail-list mb-0">
+            <dt class="col-sm-3">説明</dt><dd class="col-sm-9">@(Model.Description ?? "-")</dd>
+            <dt class="col-sm-3">技術スタック</dt><dd class="col-sm-9">@(Model.TechnologyStack ?? "-")</dd>
+            <dt class="col-sm-3">所有部署</dt><dd class="col-sm-9">@(Model.OwnerDepartment ?? "未設定")</dd>
+            <dt class="col-sm-3">管理責任者</dt><dd class="col-sm-9">@(Model.ManagerName ?? "未設定")</dd>
+            <dt class="col-sm-3">開発責任者</dt><dd class="col-sm-9">@(Model.DevelopmentLead ?? "-")</dd>
+            <dt class="col-sm-3">稼働環境</dt><dd class="col-sm-9">@(Model.RuntimeEnvironment ?? "-")</dd>
+            <dt class="col-sm-3">機密区分</dt><dd class="col-sm-9">@(Model.ConfidentialityClassification ?? "未設定")</dd>
+            <dt class="col-sm-3">最終確認日</dt><dd class="col-sm-9">@(Model.LastReviewedAt?.ToLocalTime().ToString("yyyy/MM/dd") ?? "未確認")</dd>
+            <dt class="col-sm-3">タグ</dt><dd class="col-sm-9">@(Model.TagsText ?? "-")</dd>
+            <dt class="col-sm-3">備考</dt><dd class="col-sm-9">@(Model.Notes ?? "-")</dd>
+        </dl></section>
+        <section class="form-section"><h2 class="h4">関連データ資産</h2><ul class="mb-0">@foreach (var item in dataAssets) { <li><a asp-controller="DataAssets" asp-action="Details" asp-route-id="@item.Id">@item.Name</a> (@item.DataType)</li> } @if (!dataAssets.Any()) { <li class="text-secondary">関連はありません。</li> }</ul></section>
+    </div>
+    <div class="col-lg-4">
+        <section class="form-section"><h2 class="h4">直近の稼働確認</h2>@foreach (var item in healthChecks.Take(5)) { <div class="border-bottom py-2"><strong>@item.Status</strong> / @(item.HttpStatusCode?.ToString() ?? "-") / @item.ResponseTimeMilliseconds ms<br /><small>@item.CheckedAt.ToLocalTime().ToString("yyyy/MM/dd HH:mm") @item.ErrorSummary</small></div> } @if (!healthChecks.Any()) { <p class="text-secondary mb-0">実行履歴はありません。</p> }</section>
+        <section class="form-section"><h2 class="h4">直近のデプロイ</h2>@foreach (var item in deployments.Take(5)) { <div class="border-bottom py-2"><strong>@item.Version</strong> / @item.Result<br /><small>@item.StartedAt.ToLocalTime().ToString("yyyy/MM/dd HH:mm")</small></div> } @if (!deployments.Any()) { <p class="text-secondary mb-0">履歴はありません。</p> }</section>
+    </div>
+</div>
+

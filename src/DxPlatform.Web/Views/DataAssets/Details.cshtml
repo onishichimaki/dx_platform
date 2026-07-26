@@ -1,0 +1,12 @@
+@model DataAsset
+@{
+    ViewData["Title"] = "データ資産詳細";
+    var apps = ViewBag.Applications as IEnumerable<ApplicationAsset> ?? Enumerable.Empty<ApplicationAsset>();
+    var agents = ViewBag.Agents as IEnumerable<AgentAsset> ?? Enumerable.Empty<AgentAsset>();
+    var related = ViewBag.RelatedDataAssets as IEnumerable<DataAsset> ?? Enumerable.Empty<DataAsset>();
+}
+<div class="d-flex justify-content-between align-items-start mb-3"><div><h1 class="h2">@Model.Name</h1><p class="text-secondary">@Model.DataType / @Model.SystemName / @Model.Status</p></div>@if (User.IsInRole(RoleNames.SystemAdmin) || User.IsInRole(RoleNames.CatalogAdmin)) { <div><a class="btn btn-outline-primary" asp-action="Edit" asp-route-id="@Model.Id">編集</a> <a class="btn btn-outline-danger" asp-action="Disable" asp-route-id="@Model.Id">無効化</a></div> }</div>
+<div class="row g-3"><div class="col-lg-8"><section class="form-section"><h2 class="h4">基本情報</h2><dl class="row detail-list mb-0">
+<dt class="col-sm-3">説明</dt><dd class="col-sm-9">@(Model.Description ?? "-")</dd><dt class="col-sm-3">所有部署</dt><dd class="col-sm-9">@(Model.OwnerDepartment ?? "-")</dd><dt class="col-sm-3">データオーナー</dt><dd class="col-sm-9">@(Model.DataOwner ?? "未設定")</dd><dt class="col-sm-3">更新頻度</dt><dd class="col-sm-9">@(Model.UpdateFrequency ?? "-")</dd><dt class="col-sm-3">機密区分</dt><dd class="col-sm-9">@(Model.ConfidentialityClassification ?? "未設定")</dd><dt class="col-sm-3">保持期間</dt><dd class="col-sm-9">@(Model.RetentionPeriod ?? "-")</dd><dt class="col-sm-3">接続先参照名</dt><dd class="col-sm-9"><code>@(Model.ConnectionReferenceName ?? "-")</code></dd><dt class="col-sm-3">タグ</dt><dd class="col-sm-9">@(Model.TagsText ?? "-")</dd><dt class="col-sm-3">最終確認日</dt><dd class="col-sm-9">@(Model.LastReviewedAt?.ToLocalTime().ToString("yyyy/MM/dd") ?? "未確認")</dd><dt class="col-sm-3">備考</dt><dd class="col-sm-9">@(Model.Notes ?? "-")</dd></dl></section></div>
+<div class="col-lg-4"><section class="form-section"><h2 class="h5">関連アプリ</h2><ul>@foreach (var item in apps) { <li>@item.Name</li> } @if (!apps.Any()) { <li class="text-secondary">なし</li> }</ul><h2 class="h5">関連Agent</h2><ul>@foreach (var item in agents) { <li><a asp-controller="Agents" asp-action="Details" asp-route-id="@item.Id">@item.Name</a></li> } @if (!agents.Any()) { <li class="text-secondary">なし</li> }</ul><h2 class="h5">関連データ資産</h2><ul>@foreach (var item in related) { <li><a asp-action="Details" asp-route-id="@item.Id">@item.Name</a></li> } @if (!related.Any()) { <li class="text-secondary">なし</li> }</ul></section></div></div>
+

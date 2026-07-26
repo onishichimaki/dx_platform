@@ -1,0 +1,16 @@
+﻿@model ErrorViewModel
+@{
+    ViewData["Title"] = "Error";
+}
+
+<h1 class="text-danger">エラーが発生しました。</h1>
+<h2 class="h4">処理を完了できませんでした。時間を置いて再試行してください。</h2>
+
+@if (Model.ShowRequestId)
+{
+    <p>
+        <strong>Correlation ID:</strong> <code>@Model.RequestId</code>
+    </p>
+}
+
+<p>詳細は管理者が安全なログで確認します。本番画面には例外の詳細を表示しません。</p>

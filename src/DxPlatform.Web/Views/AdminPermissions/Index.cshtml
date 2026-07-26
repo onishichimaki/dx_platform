@@ -1,0 +1,25 @@
+@model IReadOnlyList<ApplicationPermission>
+@{
+    ViewData["Title"] = "アプリ権限管理";
+    var apps = ViewBag.Applications as IEnumerable<ApplicationAsset> ?? Enumerable.Empty<ApplicationAsset>();
+    var users = ViewBag.Users as IEnumerable<ApplicationUser> ?? Enumerable.Empty<ApplicationUser>();
+    var groups = ViewBag.Groups as IEnumerable<Group> ?? Enumerable.Empty<Group>();
+    var selectedId = ViewBag.SelectedApplicationId as Guid?;
+    var userNames = users.ToDictionary(x => x.Id, x => x.DisplayName);
+    var groupNames = groups.ToDictionary(x => x.Id, x => x.Name);
+}
+<h1 class="h2">アプリ権限管理</h1>
+<div class="alert alert-info">優先順位: 明示的なユーザー拒否 → ユーザー個別許可 → グループ許可 → 設定なしは拒否。ManageはUse/View、UseはViewを含みます。</div>
+<form method="get" class="form-section"><label for="applicationId" class="form-label">対象アプリ</label><div class="input-group"><select id="applicationId" name="applicationId" class="form-select">@foreach (var app in apps) { <option value="@app.Id" selected="@(selectedId == app.Id)">@app.Name (@app.Code)</option> }</select><button class="btn btn-primary">表示</button></div></form>
+@if (selectedId.HasValue)
+{
+    <div class="row g-3 mb-3">
+        <div class="col-lg-6"><form method="post" class="form-section"><h2 class="h4">ユーザー権限を設定</h2><input type="hidden" name="ApplicationAssetId" value="@selectedId" /><input type="hidden" name="PrincipalType" value="User" /><div class="mb-3"><label for="userPrincipal" class="form-label">ユーザー</label><select id="userPrincipal" name="PrincipalId" class="form-select" required>@foreach (var user in users) { <option value="@user.Id">@user.DisplayName — @user.Email</option> }</select></div><div class="mb-3"><label for="userLevel" class="form-label">権限</label><select id="userLevel" name="Level" asp-items="Html.GetEnumSelectList<PermissionLevel>()" class="form-select"></select></div><button class="btn btn-primary">保存</button></form></div>
+        <div class="col-lg-6"><form method="post" class="form-section"><h2 class="h4">グループ権限を設定</h2><input type="hidden" name="ApplicationAssetId" value="@selectedId" /><input type="hidden" name="PrincipalType" value="Group" /><div class="mb-3"><label for="groupPrincipal" class="form-label">グループ</label><select id="groupPrincipal" name="PrincipalId" class="form-select" required>@foreach (var group in groups) { <option value="@group.Id">@group.Name (@group.Code)</option> }</select></div><div class="mb-3"><label for="groupLevel" class="form-label">権限</label><select id="groupLevel" name="Level" asp-items="Html.GetEnumSelectList<PermissionLevel>()" class="form-select"></select></div><button class="btn btn-primary">保存</button></form></div>
+    </div>
+}
+<div class="table-responsive"><table class="table table-hover"><thead><tr><th>対象</th><th>種別</th><th>権限</th><th>更新日時</th><th>操作</th></tr></thead><tbody>
+@foreach (var item in Model) { var isUser = item.UserId is not null; <tr><td>@(isUser ? userNames.GetValueOrDefault(item.UserId!, item.UserId!) : groupNames.GetValueOrDefault(item.GroupId!.Value, item.GroupId.ToString()!))</td><td>@(isUser ? "ユーザー" : "グループ")</td><td><strong>@item.Level</strong></td><td>@item.UpdatedAt.ToLocalTime().ToString("yyyy/MM/dd HH:mm")</td><td><a class="btn btn-outline-danger btn-sm" asp-action="Remove" asp-route-id="@item.Id">解除</a></td></tr> }
+@if (Model.Count == 0) { <tr><td colspan="5" class="text-center text-secondary">権限設定はありません。</td></tr> }
+</tbody></table></div>
+

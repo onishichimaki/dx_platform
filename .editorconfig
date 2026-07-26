@@ -1,0 +1,17 @@
+root = true
+
+[*.cs]
+charset = utf-8
+end_of_line = crlf
+insert_final_newline = true
+indent_style = space
+indent_size = 4
+
+# xUnitのシナリオ名は可読性のため Method_Condition_Result 形式を許可する。
+[tests/**/*.cs]
+dotnet_diagnostic.CA1707.severity = none
+
+# EF Coreが生成するMigrationの配列引数は手動修正しない。
+[src/DxPlatform.Infrastructure/Persistence/Migrations/*.cs]
+dotnet_diagnostic.CA1861.severity = none
+

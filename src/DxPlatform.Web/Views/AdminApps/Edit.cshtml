@@ -1,0 +1,33 @@
+@model ApplicationAssetInputModel
+@{
+    ViewData["Title"] = Model.Id.HasValue ? "アプリ編集" : "アプリ登録";
+    var owners = ViewBag.OwnerUsers as IEnumerable<ApplicationUser> ?? Enumerable.Empty<ApplicationUser>();
+}
+<h1 class="h2">@ViewData["Title"]</h1>
+<form method="post" class="form-section">
+    <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+    <input asp-for="Id" type="hidden" /><input asp-for="RowVersion" type="hidden" />
+    <div class="row g-3">
+        <div class="col-md-4"><label asp-for="Code" class="form-label required-label"></label><input asp-for="Code" class="form-control" /><span asp-validation-for="Code" class="text-danger"></span></div>
+        <div class="col-md-8"><label asp-for="Name" class="form-label required-label"></label><input asp-for="Name" class="form-control" /><span asp-validation-for="Name" class="text-danger"></span></div>
+        <div class="col-12"><label asp-for="Description" class="form-label"></label><textarea asp-for="Description" class="form-control" rows="3"></textarea><span asp-validation-for="Description" class="text-danger"></span></div>
+        <div class="col-md-6"><label asp-for="Url" class="form-label"></label><input asp-for="Url" class="form-control" /><span asp-validation-for="Url" class="text-danger"></span></div>
+        <div class="col-md-3"><label asp-for="AssetType" class="form-label"></label><select asp-for="AssetType" asp-items="Html.GetEnumSelectList<ApplicationAssetType>()" class="form-select"></select></div>
+        <div class="col-md-3"><label asp-for="Status" class="form-label"></label><select asp-for="Status" asp-items="Html.GetEnumSelectList<LifecycleStatus>()" class="form-select"></select><span asp-validation-for="Status" class="text-danger"></span></div>
+        <div class="col-md-6"><label asp-for="TechnologyStack" class="form-label"></label><input asp-for="TechnologyStack" class="form-control" /></div>
+        <div class="col-md-3"><label asp-for="Version" class="form-label"></label><input asp-for="Version" class="form-control" /></div>
+        <div class="col-md-3"><label asp-for="RuntimeEnvironment" class="form-label"></label><input asp-for="RuntimeEnvironment" class="form-control" /></div>
+        <div class="col-md-4"><label asp-for="OwnerDepartment" class="form-label"></label><input asp-for="OwnerDepartment" class="form-control" /></div>
+        <div class="col-md-4"><label asp-for="ManagerName" class="form-label"></label><input asp-for="ManagerName" class="form-control" /></div>
+        <div class="col-md-4"><label asp-for="OwnerUserId" class="form-label"></label><select asp-for="OwnerUserId" class="form-select"><option value="">未設定</option>@foreach (var owner in owners) { <option value="@owner.Id">@owner.DisplayName</option> }</select></div>
+        <div class="col-md-4"><label asp-for="DevelopmentLead" class="form-label"></label><input asp-for="DevelopmentLead" class="form-control" /></div>
+        <div class="col-md-4"><label asp-for="ConfidentialityClassification" class="form-label"></label><input asp-for="ConfidentialityClassification" class="form-control" /></div>
+        <div class="col-md-4"><label asp-for="LastReviewedAt" class="form-label"></label><input asp-for="LastReviewedAt" class="form-control" /></div>
+        <div class="col-md-6"><label asp-for="GitHubRepositoryUrl" class="form-label"></label><input asp-for="GitHubRepositoryUrl" class="form-control" /><span asp-validation-for="GitHubRepositoryUrl" class="text-danger"></span></div>
+        <div class="col-md-6"><label asp-for="HealthCheckUrl" class="form-label"></label><input asp-for="HealthCheckUrl" class="form-control" /><span asp-validation-for="HealthCheckUrl" class="text-danger"></span></div>
+        <div class="col-12"><label asp-for="TagsText" class="form-label"></label><input asp-for="TagsText" class="form-control" /></div>
+        <div class="col-12"><label asp-for="Notes" class="form-label"></label><textarea asp-for="Notes" class="form-control" rows="3"></textarea></div>
+    </div>
+    <div class="mt-3 d-flex gap-2"><button class="btn btn-primary" type="submit">保存</button><a class="btn btn-outline-secondary" asp-action="Index">キャンセル</a></div>
+</form>
+@section Scripts { <partial name="_ValidationScriptsPartial" /> }

@@ -1,0 +1,6 @@
+@model ApplicationUser
+@{ ViewData["Title"] = "ユーザー無効化"; }
+<h1 class="h2">ユーザーを無効化しますか</h1>
+<div class="alert alert-warning"><strong>@Model.DisplayName</strong>（@Model.Email）はログインできなくなり、既存セッションも失効します。記録は削除されません。</div>
+<form method="post"><button class="btn btn-danger" type="submit">無効化する</button> <a class="btn btn-outline-secondary" asp-action="Index">キャンセル</a></form>
+

@@ -1,0 +1,9 @@
+@model IReadOnlyList<AuditLog>
+@{ ViewData["Title"] = "監査ログ"; }
+<h1 class="h2">監査ログ</h1><p class="text-secondary">パスワード、Token、Cookie、接続文字列、入力全文は記録しません。</p>
+<form method="get" class="form-section"><div class="row g-2 align-items-end"><div class="col-md-4"><label for="actionType" class="form-label">操作種別</label><input id="actionType" name="actionType" value="@ViewBag.ActionType" class="form-control" /></div><div class="col-md-3"><label for="targetType" class="form-label">対象種別</label><input id="targetType" name="targetType" value="@ViewBag.TargetType" class="form-control" /></div><div class="col-md-3"><label for="succeeded" class="form-label">成否</label><select id="succeeded" name="succeeded" class="form-select"><option value="">すべて</option><option value="true" selected="@(ViewBag.Succeeded?.ToString() == "True")">成功</option><option value="false" selected="@(ViewBag.Succeeded?.ToString() == "False")">失敗</option></select></div><div class="col-md-2"><button class="btn btn-primary w-100">検索</button></div></div></form>
+<div class="table-responsive"><table class="table table-sm table-hover align-middle"><thead><tr><th>日時</th><th>操作者</th><th>操作</th><th>対象</th><th>成否</th><th>要約</th><th>Correlation ID</th></tr></thead><tbody>
+@foreach (var item in Model) { <tr><td>@item.OccurredAt.ToLocalTime().ToString("yyyy/MM/dd HH:mm:ss")</td><td>@(item.ActorDisplayName ?? "システム/API")</td><td>@item.ActionType</td><td>@item.TargetType / @item.TargetId</td><td>@(item.Succeeded ? "成功" : "失敗")</td><td>@item.Summary</td><td><code>@item.CorrelationId</code></td></tr> }
+@if (Model.Count == 0) { <tr><td colspan="7" class="text-center text-secondary">監査ログはありません。</td></tr> }
+</tbody></table></div>
+

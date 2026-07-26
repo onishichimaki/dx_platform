@@ -1,0 +1,4 @@
+@model DataAsset
+@{ ViewData["Title"] = "データ資産無効化"; }
+<h1 class="h2">データ資産を無効化しますか</h1><div class="alert alert-warning"><strong>@Model.Name</strong> は一般一覧から非表示になります。関連と履歴は削除されません。</div><form method="post"><button class="btn btn-danger">無効化する</button> <a class="btn btn-outline-secondary" asp-action="Details" asp-route-id="@Model.Id">キャンセル</a></form>
+
