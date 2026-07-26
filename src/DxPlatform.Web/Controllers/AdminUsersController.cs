@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using DxPlatform.Application.Abstractions;
 using DxPlatform.Application.Security;
 using DxPlatform.Domain.Groups;
@@ -79,7 +80,9 @@ public sealed class AdminUsersController(
             DisplayName = model.DisplayName.Trim(),
             Department = model.Department?.Trim(),
             IsActive = model.IsActive,
-            EmailConfirmed = true
+            EmailConfirmed = true,
+            CreatedBy = User.FindFirstValue(ClaimTypes.NameIdentifier),
+            UpdatedBy = User.FindFirstValue(ClaimTypes.NameIdentifier)
         };
         var result = await userManager.CreateAsync(user, model.InitialPassword!);
         if (!result.Succeeded)
@@ -97,7 +100,7 @@ public sealed class AdminUsersController(
         await SyncGroupsAsync(user.Id, model.SelectedGroupIds, cancellationToken);
         await auditService.WriteAsync(
             "UserCreated", "User", user.Id, true,
-            $"ユーザー「{user.DisplayName}」を登録しました。",
+            "ユーザーを登録しました。",
             cancellationToken);
         TempData["StatusMessage"] = "ユーザーを登録しました。";
         return RedirectToAction(nameof(Index));
@@ -164,6 +167,7 @@ public sealed class AdminUsersController(
         user.DisplayName = model.DisplayName.Trim();
         user.Department = model.Department?.Trim();
         user.IsActive = model.IsActive;
+        user.UpdatedBy = User.FindFirstValue(ClaimTypes.NameIdentifier);
         user.UpdatedAt = DateTimeOffset.UtcNow;
         user.RowVersion = Guid.NewGuid().ToByteArray();
 
@@ -197,7 +201,7 @@ public sealed class AdminUsersController(
 
         await auditService.WriteAsync(
             "UserUpdated", "User", user.Id, true,
-            $"ユーザー「{user.DisplayName}」とロール・所属を変更しました。",
+            "ユーザー、ロール、所属を変更しました。",
             cancellationToken);
         TempData["StatusMessage"] = "ユーザーを更新しました。";
         return RedirectToAction(nameof(Index));
@@ -223,13 +227,14 @@ public sealed class AdminUsersController(
         }
 
         user.IsActive = false;
+        user.UpdatedBy = User.FindFirstValue(ClaimTypes.NameIdentifier);
         user.UpdatedAt = DateTimeOffset.UtcNow;
         user.RowVersion = Guid.NewGuid().ToByteArray();
         await userManager.UpdateAsync(user);
         await userManager.UpdateSecurityStampAsync(user);
         await auditService.WriteAsync(
             "UserDisabled", "User", user.Id, true,
-            $"ユーザー「{user.DisplayName}」を無効化しました。",
+            "ユーザーを無効化しました。",
             cancellationToken);
         TempData["StatusMessage"] = "ユーザーを無効化しました。";
         return RedirectToAction(nameof(Index));

@@ -28,7 +28,9 @@ public sealed class AuditService(
             TargetId = targetId,
             Succeeded = succeeded,
             Summary = summary,
-            CorrelationId = currentUserContext.CorrelationId
+            CorrelationId = currentUserContext.CorrelationId,
+            CreatedBy = currentUserContext.UserId,
+            UpdatedBy = currentUserContext.UserId
         });
         await dbContext.SaveChangesAsync(cancellationToken);
     }
@@ -81,4 +83,3 @@ public sealed class ApplicationHealthCheckService(HttpClient httpClient)
         }
     }
 }
-

@@ -60,7 +60,12 @@ public static class DatabaseInitializer
         {
             if (!await roleManager.RoleExistsAsync(roleName))
             {
-                var result = await roleManager.CreateAsync(new ApplicationRole { Name = roleName });
+                var result = await roleManager.CreateAsync(new ApplicationRole
+                {
+                    Name = roleName,
+                    CreatedBy = "bootstrap",
+                    UpdatedBy = "bootstrap"
+                });
                 if (!result.Succeeded)
                 {
                     throw new InvalidOperationException(
@@ -95,7 +100,9 @@ public static class DatabaseInitializer
                 DisplayName = "初期管理者",
                 Department = "Platform Administration",
                 EmailConfirmed = true,
-                IsActive = true
+                IsActive = true,
+                CreatedBy = "bootstrap",
+                UpdatedBy = "bootstrap"
             };
             var result = await userManager.CreateAsync(user, options.Password!);
             if (!result.Succeeded)

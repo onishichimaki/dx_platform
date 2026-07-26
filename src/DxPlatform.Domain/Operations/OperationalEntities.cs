@@ -51,9 +51,8 @@ public sealed class HealthCheckResult : BaseEntity
     public string? ErrorSummary { get; set; }
 }
 
-public sealed class AuditLog
+public sealed class AuditLog : BaseEntity
 {
-    public Guid Id { get; set; } = Guid.NewGuid();
     public DateTimeOffset OccurredAt { get; set; } = DateTimeOffset.UtcNow;
 
     [StringLength(450)]
@@ -79,4 +78,3 @@ public sealed class AuditLog
     [Required, StringLength(100)]
     public string CorrelationId { get; set; } = string.Empty;
 }
-

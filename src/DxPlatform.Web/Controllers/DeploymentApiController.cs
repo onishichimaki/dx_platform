@@ -19,8 +19,15 @@ namespace DxPlatform.Web.Controllers;
 public sealed class DeploymentApiController(
     AppDbContext dbContext,
     IOptions<DeploymentApiOptions> options,
-    IAuditService auditService) : ControllerBase
+    IAuditService auditService,
+    ILogger<DeploymentApiController> logger) : ControllerBase
 {
+    private static readonly Action<ILogger, Guid, Guid, DeploymentResult, Exception?>
+        DeploymentRegistered = LoggerMessage.Define<Guid, Guid, DeploymentResult>(
+            LogLevel.Information,
+            new EventId(2101, nameof(DeploymentRegistered)),
+            "Deployment history registered. AssetId={AssetId} DeploymentId={DeploymentId} Result={Result}");
+
     [HttpPost("")]
     public async Task<IActionResult> Register(
         DeploymentRegistrationRequest request,
@@ -58,6 +65,15 @@ public sealed class DeploymentApiController(
             return ValidationProblem(ModelState);
         }
 
+        if (ContainsSensitiveMarker(request.Notes) ||
+            ContainsSensitiveMarker(request.LogReference))
+        {
+            ModelState.AddModelError(
+                nameof(request.Notes),
+                "秘密情報を示す文字列はDeployment履歴へ保存できません。");
+            return ValidationProblem(ModelState);
+        }
+
         var deployment = new Deployment
         {
             ApplicationAssetId = request.ApplicationAssetId,
@@ -84,6 +100,12 @@ public sealed class DeploymentApiController(
             true,
             $"Deployment履歴を登録しました。結果: {deployment.Result}",
             cancellationToken);
+        DeploymentRegistered(
+            logger,
+            deployment.ApplicationAssetId,
+            deployment.Id,
+            deployment.Result,
+            null);
 
         return CreatedAtAction(
             nameof(DeploymentsController.Index),
@@ -98,5 +120,18 @@ public sealed class DeploymentApiController(
         var suppliedHash = SHA256.HashData(Encoding.UTF8.GetBytes(supplied));
         return CryptographicOperations.FixedTimeEquals(expectedHash, suppliedHash);
     }
-}
 
+    private static bool ContainsSensitiveMarker(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        string[] markers =
+        [
+            "password=", "pwd=", "token=", "api_key", "apikey", "connectionstring", "bearer "
+        ];
+        return markers.Any(marker => value.Contains(marker, StringComparison.OrdinalIgnoreCase));
+    }
+}

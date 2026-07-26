@@ -89,6 +89,15 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
         {
             entity.Property(x => x.DisplayName).HasMaxLength(160).IsRequired();
             entity.Property(x => x.Department).HasMaxLength(160);
+            entity.Property(x => x.CreatedBy).HasMaxLength(450);
+            entity.Property(x => x.UpdatedBy).HasMaxLength(450);
+            entity.Property(x => x.RowVersion).HasMaxLength(16).IsConcurrencyToken().ValueGeneratedNever();
+            entity.HasIndex(x => x.IsActive);
+        });
+        builder.Entity<ApplicationRole>(entity =>
+        {
+            entity.Property(x => x.CreatedBy).HasMaxLength(450);
+            entity.Property(x => x.UpdatedBy).HasMaxLength(450);
             entity.Property(x => x.RowVersion).HasMaxLength(16).IsConcurrencyToken().ValueGeneratedNever();
             entity.HasIndex(x => x.IsActive);
         });
@@ -213,6 +222,34 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     {
         var now = DateTimeOffset.UtcNow;
         foreach (var entry in ChangeTracker.Entries<BaseEntity>())
+        {
+            if (entry.State == EntityState.Added)
+            {
+                entry.Entity.CreatedAt = now;
+            }
+
+            if (entry.State is EntityState.Added or EntityState.Modified)
+            {
+                entry.Entity.UpdatedAt = now;
+                entry.Entity.RowVersion = Guid.NewGuid().ToByteArray();
+            }
+        }
+
+        foreach (var entry in ChangeTracker.Entries<ApplicationUser>())
+        {
+            if (entry.State == EntityState.Added)
+            {
+                entry.Entity.CreatedAt = now;
+            }
+
+            if (entry.State is EntityState.Added or EntityState.Modified)
+            {
+                entry.Entity.UpdatedAt = now;
+                entry.Entity.RowVersion = Guid.NewGuid().ToByteArray();
+            }
+        }
+
+        foreach (var entry in ChangeTracker.Entries<ApplicationRole>())
         {
             if (entry.State == EntityState.Added)
             {

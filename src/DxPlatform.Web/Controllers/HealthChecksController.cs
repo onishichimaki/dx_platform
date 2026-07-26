@@ -2,6 +2,7 @@ using System.Security.Claims;
 using DxPlatform.Application.Abstractions;
 using DxPlatform.Application.Security;
 using DxPlatform.Application.Validation;
+using DxPlatform.Domain.Enums;
 using DxPlatform.Domain.Operations;
 using DxPlatform.Infrastructure.Configuration;
 using DxPlatform.Infrastructure.Persistence;
@@ -19,8 +20,15 @@ public sealed class HealthChecksController(
     IApplicationHealthCheckService healthCheckService,
     IUrlSafetyValidator urlValidator,
     IOptions<HealthCheckOptions> options,
-    IAuditService auditService) : Controller
+    IAuditService auditService,
+    ILogger<HealthChecksController> logger) : Controller
 {
+    private static readonly Action<ILogger, Guid, Guid, HealthStatus, Exception?>
+        HealthCheckCompleted = LoggerMessage.Define<Guid, Guid, HealthStatus>(
+            LogLevel.Information,
+            new EventId(2201, nameof(HealthCheckCompleted)),
+            "Manual health check completed. AssetId={AssetId} HealthCheckResultId={HealthCheckResultId} Status={Status}");
+
     [HttpGet("")]
     public async Task<IActionResult> Index(CancellationToken cancellationToken)
     {
@@ -90,8 +98,13 @@ public sealed class HealthChecksController(
             true,
             $"手動ヘルスチェックを実行しました。結果: {result.Status}",
             cancellationToken);
+        HealthCheckCompleted(
+            logger,
+            applicationId,
+            result.Id,
+            result.Status,
+            null);
         TempData["StatusMessage"] = $"ヘルスチェックを実行しました: {result.Status}";
         return RedirectToAction(nameof(Index));
     }
 }
-

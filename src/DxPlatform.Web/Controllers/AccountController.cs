@@ -65,7 +65,9 @@ public sealed class AccountController(
 
         if (result.Succeeded)
         {
+            HttpContext.User = await signInManager.CreateUserPrincipalAsync(user);
             user.LastLoginAt = DateTimeOffset.UtcNow;
+            user.UpdatedBy = user.Id;
             user.UpdatedAt = DateTimeOffset.UtcNow;
             user.RowVersion = Guid.NewGuid().ToByteArray();
             await userManager.UpdateAsync(user);
@@ -152,4 +154,3 @@ public sealed class AccountController(
     [HttpGet("/access-denied")]
     public IActionResult AccessDenied() => View();
 }
-
