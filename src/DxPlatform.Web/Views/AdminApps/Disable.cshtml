@@ -1,0 +1,6 @@
+@model ApplicationAsset
+@{ ViewData["Title"] = "アプリ無効化"; }
+<h1 class="h2">アプリを無効化しますか</h1>
+<div class="alert alert-warning"><strong>@Model.Name</strong>（@Model.Code）は一般一覧から非表示になります。履歴は削除されません。</div>
+<form method="post"><button class="btn btn-danger" type="submit">無効化する</button> <a class="btn btn-outline-secondary" asp-action="Index">キャンセル</a></form>
+

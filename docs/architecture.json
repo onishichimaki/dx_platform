@@ -1,0 +1,495 @@
+{
+  "system_name": "DX共通アプリ基盤",
+  "summary": ".NET 10 / ASP.NET Core MVC と EF Core で構成する社内向けデジタル資産ポータル。アプリ、データ、Agent、Tool、配備、稼働確認を単一のモジュラーモノリスで管理し、内部認証、資産単位権限、監査、IIS配備を提供する。",
+  "modules": [
+    {
+      "id": "web",
+      "name": "Web presentation",
+      "type": "ASP.NET Core MVC",
+      "responsibility": "日本語UI、Cookie認証、route、CSRF対策、health endpoint、correlation ID、file loggingを提供する。",
+      "main_inputs": ["HTTP request", "Identity cookie", "deployment bearer token"],
+      "main_outputs": ["HTML", "redirect", "JSON health/deployment response"],
+      "source_files": ["src/DxPlatform.Web/Program.cs", "src/DxPlatform.Web/Controllers/AppsController.cs", "src/DxPlatform.Web/Views/Shared/_Layout.cshtml"]
+    },
+    {
+      "id": "application",
+      "name": "Application rules",
+      "type": "Class library",
+      "responsibility": "資産権限の優先順位、lifecycle transition、URL安全性、運用service contractを定義する。",
+      "main_inputs": ["user/group grants", "lifecycle status", "candidate URL"],
+      "main_outputs": ["effective permission", "validation result", "service contract"],
+      "source_files": ["src/DxPlatform.Application/Security/PermissionEvaluator.cs", "src/DxPlatform.Application/Applications/LifecycleRules.cs", "src/DxPlatform.Application/Validation/UrlSafetyValidator.cs"]
+    },
+    {
+      "id": "domain",
+      "name": "Domain model",
+      "type": "Class library",
+      "responsibility": "アプリ、データ、Agent、Tool、group、tag、deployment、health、auditのentityとenumを保持する。",
+      "main_inputs": ["validated domain values"],
+      "main_outputs": ["entities", "relationships", "lifecycle enums"],
+      "source_files": ["src/DxPlatform.Domain/Applications/ApplicationAsset.cs", "src/DxPlatform.Domain/DataAssets/DataAsset.cs", "src/DxPlatform.Domain/Agents/AgentAsset.cs", "src/DxPlatform.Domain/Operations/OperationalEntities.cs"]
+    },
+    {
+      "id": "infrastructure",
+      "name": "Infrastructure",
+      "type": "EF Core / Identity / HTTP services",
+      "responsibility": "SQL Server/SQLite永続化、Identity store、seed、実効権限取得、監査、外部health checkを実装する。",
+      "main_inputs": ["configuration", "domain entities", "health URL"],
+      "main_outputs": ["database records", "claims", "health observations"],
+      "source_files": ["src/DxPlatform.Infrastructure/DependencyInjection.cs", "src/DxPlatform.Infrastructure/Persistence/AppDbContext.cs", "src/DxPlatform.Infrastructure/Persistence/DatabaseInitializer.cs", "src/DxPlatform.Infrastructure/Operations/OperationalServices.cs"]
+    },
+    {
+      "id": "delivery",
+      "name": "Build and delivery",
+      "type": "GitHub Actions / PowerShell / IIS",
+      "responsibility": "Windows上でrestore、build、test、publish、ZIP化し、self-hosted runnerからIISへbackup付き配備とsmoke testを行う。",
+      "main_inputs": ["Git commit", "GitHub Environment variables/secrets", "IIS publish ZIP"],
+      "main_outputs": ["test results", "publish artifact", "IIS deployment", "deployment record"],
+      "source_files": [".github/workflows/ci.yml", ".github/workflows/deploy-staging.yml", ".github/workflows/deploy-production.yml", "scripts/deploy-iis.ps1"]
+    }
+  ],
+  "screens": [
+    {
+      "id": "account",
+      "name": "ログイン・パスワード変更",
+      "type": "Public/authenticated MVC",
+      "description": "内部ユーザーのログイン、ログアウト、パスワード変更、アクセス拒否を扱う。",
+      "source_files": ["src/DxPlatform.Web/Controllers/AccountController.cs", "src/DxPlatform.Web/Views/Account/Login.cshtml", "src/DxPlatform.Web/Views/Account/ChangePassword.cshtml"]
+    },
+    {
+      "id": "dashboard",
+      "name": "ダッシュボード",
+      "type": "Authenticated MVC",
+      "description": "各資産数、直近配備、health概要への入口を提供する。",
+      "source_files": ["src/DxPlatform.Web/Controllers/DashboardController.cs", "src/DxPlatform.Web/Views/Dashboard/Index.cshtml"]
+    },
+    {
+      "id": "application_catalog",
+      "name": "アプリ一覧・詳細・起動",
+      "type": "Permission-filtered MVC",
+      "description": "実効Read権限以上のアプリを一覧・詳細表示し、起動時にも権限と安全なURLを再検証する。",
+      "source_files": ["src/DxPlatform.Web/Controllers/AppsController.cs", "src/DxPlatform.Web/Views/Apps/Index.cshtml", "src/DxPlatform.Web/Views/Apps/Details.cshtml"]
+    },
+    {
+      "id": "application_admin",
+      "name": "アプリ管理",
+      "type": "Permission-aware MVC CRUD",
+      "description": "SystemAdmin、CatalogAdmin、ownerまたはManage権限の利用者がアプリを登録・更新・無効化する。",
+      "source_files": ["src/DxPlatform.Web/Controllers/AdminAppsController.cs", "src/DxPlatform.Web/Views/AdminApps/Edit.cshtml", "src/DxPlatform.Web/Views/AdminApps/Disable.cshtml"]
+    },
+    {
+      "id": "identity_admin",
+      "name": "ユーザー・グループ・権限管理",
+      "type": "SystemAdmin MVC CRUD",
+      "description": "ユーザー、固定ロール、group membership、アプリ単位user/group grantを管理する。",
+      "source_files": ["src/DxPlatform.Web/Controllers/AdminUsersController.cs", "src/DxPlatform.Web/Controllers/AdminGroupsController.cs", "src/DxPlatform.Web/Controllers/AdminPermissionsController.cs"]
+    },
+    {
+      "id": "data_catalog",
+      "name": "データ資産管理",
+      "type": "Authenticated/Catalog admin MVC",
+      "description": "接続秘密を保存せず、data asset metadataとrelationを登録・検索・無効化する。",
+      "source_files": ["src/DxPlatform.Web/Controllers/DataAssetsController.cs", "src/DxPlatform.Web/Views/DataAssets/Details.cshtml", "src/DxPlatform.Domain/DataAssets/DataAsset.cs"]
+    },
+    {
+      "id": "agent_catalog",
+      "name": "Agent・Tool管理",
+      "type": "Authenticated/Catalog admin MVC",
+      "description": "Agent/Tool metadata、data/tool relations、prompt location referenceを管理する。prompt本文やsecretは保存しない。",
+      "source_files": ["src/DxPlatform.Web/Controllers/AgentsController.cs", "src/DxPlatform.Web/Views/Agents/Details.cshtml", "src/DxPlatform.Domain/Agents/AgentAsset.cs"]
+    },
+    {
+      "id": "operations",
+      "name": "配備・稼働確認",
+      "type": "Authenticated MVC",
+      "description": "配備履歴を表示し、許可ロールが手動health checkを実行して結果を確認する。",
+      "source_files": ["src/DxPlatform.Web/Controllers/DeploymentsController.cs", "src/DxPlatform.Web/Controllers/HealthChecksController.cs", "src/DxPlatform.Web/Views/HealthChecks/Index.cshtml"]
+    },
+    {
+      "id": "audit_settings",
+      "name": "監査・設定確認",
+      "type": "SystemAdmin MVC",
+      "description": "監査記録の検索と、秘密値を表示しない実行構成概要を提供する。",
+      "source_files": ["src/DxPlatform.Web/Controllers/AuditLogsController.cs", "src/DxPlatform.Web/Controllers/SettingsController.cs", "src/DxPlatform.Web/Views/AuditLogs/Index.cshtml"]
+    }
+  ],
+  "apis": [
+    {
+      "id": "deployment_registration",
+      "name": "POST /api/deployments",
+      "type": "Bearer-token JSON API",
+      "description": "GitHub Actions等からdeployment resultを登録する。専用tokenを固定時間比較し、secretらしいnoteを拒否する。",
+      "inputs": ["application asset id", "version/SHA/branch", "result/environment", "log reference"],
+      "outputs": ["201 Created", "401", "400"],
+      "source_files": ["src/DxPlatform.Web/Controllers/DeploymentApiController.cs", "src/DxPlatform.Infrastructure/Configuration/PlatformOptions.cs", "tests/DxPlatform.IntegrationTests/CatalogAndOperationsTests.cs"]
+    },
+    {
+      "id": "liveness",
+      "name": "GET /health/live",
+      "type": "Anonymous health endpoint",
+      "description": "プロセスがHTTP応答可能かをJSONで返す。DB依存を含めない。",
+      "inputs": ["HTTP GET"],
+      "outputs": ["Healthy/Unhealthy JSON"],
+      "source_files": ["src/DxPlatform.Web/Program.cs"]
+    },
+    {
+      "id": "readiness",
+      "name": "GET /health/ready",
+      "type": "Anonymous health endpoint",
+      "description": "DB queryを含む配備後smoke test用readinessを返す。",
+      "inputs": ["HTTP GET", "database connection"],
+      "outputs": ["Healthy/Unhealthy JSON"],
+      "source_files": ["src/DxPlatform.Web/Program.cs", "src/DxPlatform.Web/Security/DatabaseReadyHealthCheck.cs", "scripts/smoke-test.ps1"]
+    },
+    {
+      "id": "mvc_routes",
+      "name": "MVC route surface",
+      "type": "Cookie-authenticated HTTP",
+      "description": "Controller attribute routeとdefault routeで画面操作を受け付け、mutationにはanti-forgery validationを適用する。",
+      "inputs": ["form/query/route values", "Identity cookie", "anti-forgery token"],
+      "outputs": ["HTML", "redirect", "validation errors"],
+      "source_files": ["src/DxPlatform.Web/Program.cs", "src/DxPlatform.Web/Controllers/AdminAppsController.cs", "src/DxPlatform.Web/Controllers/AdminUsersController.cs"]
+    }
+  ],
+  "database": {
+    "tables": [
+      {
+        "id": "identity_tables",
+        "name": "AspNetUsers / AspNetRoles / Identity joins",
+        "type": "Identity",
+        "description": "内部ユーザー、role、claim、login、tokenを保持する。ユーザーにはdisplay name、department、active状態、last loginを追加する。",
+        "source_files": ["src/DxPlatform.Infrastructure/Identity/ApplicationIdentity.cs", "src/DxPlatform.Infrastructure/Persistence/AppDbContext.cs", "src/DxPlatform.Infrastructure/Persistence/Migrations/20260726090428_InitialSqlServer.cs", "src/DxPlatform.Infrastructure/Persistence/Migrations/20260726093846_AddIdentityAuditMetadata.cs"]
+      },
+      {
+        "id": "groups",
+        "name": "Groups / GroupMembers",
+        "type": "Authorization",
+        "description": "権限集約用groupと、有効状態を持つuser membershipを保持する。",
+        "source_files": ["src/DxPlatform.Domain/Groups/Group.cs", "src/DxPlatform.Infrastructure/Persistence/AppDbContext.cs"]
+      },
+      {
+        "id": "applications",
+        "name": "ApplicationAssets / ApplicationPermissions",
+        "type": "Catalog and authorization",
+        "description": "アプリmetadataとuser/group単位のRead/Use/Manage/None grantを保持する。",
+        "source_files": ["src/DxPlatform.Domain/Applications/ApplicationAsset.cs", "src/DxPlatform.Infrastructure/Persistence/AppDbContext.cs"]
+      },
+      {
+        "id": "data_assets",
+        "name": "DataAssets / DataAssetRelations",
+        "type": "Catalog",
+        "description": "データ資産metadataとsource-target relationを保持する。接続秘密は保持しない。",
+        "source_files": ["src/DxPlatform.Domain/DataAssets/DataAsset.cs", "src/DxPlatform.Infrastructure/Persistence/AppDbContext.cs"]
+      },
+      {
+        "id": "agent_tool_assets",
+        "name": "AgentAssets / ToolAssets",
+        "type": "Catalog",
+        "description": "AI Agentと利用Toolのmetadata、リスク・評価・公開範囲を保持する。",
+        "source_files": ["src/DxPlatform.Domain/Agents/AgentAsset.cs", "src/DxPlatform.Infrastructure/Persistence/AppDbContext.cs"]
+      },
+      {
+        "id": "asset_joins",
+        "name": "ApplicationDataAssets / AgentDataAssets / AgentToolAssets",
+        "type": "Many-to-many joins",
+        "description": "アプリ・データ・Agent・Toolの利用関係を明示する。",
+        "source_files": ["src/DxPlatform.Domain/Relations/AssetRelations.cs", "src/DxPlatform.Infrastructure/Persistence/AppDbContext.cs"]
+      },
+      {
+        "id": "operations_tables",
+        "name": "Deployments / HealthCheckResults / AuditLogs",
+        "type": "Operations",
+        "description": "配備結果、手動health observation、actor/action/target/correlationを持つ監査記録を保持する。response bodyやsecretは保持しない。",
+        "source_files": ["src/DxPlatform.Domain/Operations/OperationalEntities.cs", "src/DxPlatform.Infrastructure/Operations/OperationalServices.cs", "src/DxPlatform.Infrastructure/Persistence/AppDbContext.cs"]
+      },
+      {
+        "id": "tags",
+        "name": "Tags / AssetTags",
+        "type": "Cross-catalog classification",
+        "description": "資産種別と資産IDを組み合わせた横断tag割当を保持する。",
+        "source_files": ["src/DxPlatform.Domain/Tags/Tag.cs", "src/DxPlatform.Infrastructure/Persistence/AppDbContext.cs"]
+      }
+    ],
+    "relationships": [
+      {
+        "id": "user_group_membership",
+        "name": "AspNetUsers 1..* GroupMembers *..1 Groups",
+        "type": "membership",
+        "description": "有効なmembershipのみ実効権限計算へ参加する。",
+        "source_files": ["src/DxPlatform.Infrastructure/Persistence/AppDbContext.cs", "src/DxPlatform.Infrastructure/Security/ApplicationAccessService.cs"]
+      },
+      {
+        "id": "application_grants",
+        "name": "ApplicationAsset 1..* ApplicationPermissions",
+        "type": "polymorphic principal grant",
+        "description": "各grantはUserIdまたはGroupIdのどちらか一方を持つcheck constraintで保護される。",
+        "source_files": ["src/DxPlatform.Infrastructure/Persistence/AppDbContext.cs", "src/DxPlatform.Application/Security/PermissionEvaluator.cs"]
+      },
+      {
+        "id": "application_data",
+        "name": "ApplicationAssets *..* DataAssets",
+        "type": "join",
+        "description": "アプリが利用するデータ資産をApplicationDataAssetsで表す。",
+        "source_files": ["src/DxPlatform.Domain/Relations/AssetRelations.cs", "src/DxPlatform.Infrastructure/Persistence/AppDbContext.cs"]
+      },
+      {
+        "id": "agent_data_tool",
+        "name": "AgentAssets *..* DataAssets / ToolAssets",
+        "type": "joins",
+        "description": "Agentが参照するdataと呼び出すtoolを結合表で表す。",
+        "source_files": ["src/DxPlatform.Domain/Relations/AssetRelations.cs", "src/DxPlatform.Infrastructure/Persistence/AppDbContext.cs"]
+      },
+      {
+        "id": "data_lineage",
+        "name": "DataAsset source *..* target DataAsset",
+        "type": "directed self relation",
+        "description": "DataAssetRelationsがsource-targetとrelation typeを保持する。",
+        "source_files": ["src/DxPlatform.Domain/DataAssets/DataAsset.cs", "src/DxPlatform.Infrastructure/Persistence/AppDbContext.cs"]
+      },
+      {
+        "id": "application_operations",
+        "name": "ApplicationAsset 1..* Deployments / HealthCheckResults",
+        "type": "operations history",
+        "description": "アプリ単位の配備履歴とhealth observationを蓄積する。",
+        "source_files": ["src/DxPlatform.Domain/Operations/OperationalEntities.cs", "src/DxPlatform.Infrastructure/Persistence/AppDbContext.cs"]
+      }
+    ]
+  },
+  "batches": [
+    {
+      "id": "ci",
+      "name": "CI build/test/publish",
+      "type": "GitHub Actions",
+      "description": "push/PRでrestore、Release build、unit/integration test、publish、artifact uploadを行う。",
+      "inputs": ["repository checkout"],
+      "outputs": ["TRX", "dx-platform.zip"],
+      "source_files": [".github/workflows/ci.yml"]
+    },
+    {
+      "id": "staging_deploy",
+      "name": "Staging IIS deployment",
+      "type": "GitHub Actions + self-hosted runner",
+      "description": "有効化variableがtrueの場合にmainまたは手動起動からtest、package、IIS配備、履歴登録を行う。",
+      "inputs": ["GitHub Environment variables/secrets", "source commit"],
+      "outputs": ["staging deployment", "deployment record"],
+      "source_files": [".github/workflows/deploy-staging.yml", "scripts/deploy-iis.ps1"]
+    },
+    {
+      "id": "production_deploy",
+      "name": "Production IIS deployment",
+      "type": "Manual GitHub Actions + protected environment",
+      "description": "versionを入力し、production Environmentの承認と会社managed runnerを通して配備する。",
+      "inputs": ["version", "approved environment variables/secrets", "source commit"],
+      "outputs": ["production deployment", "deployment record"],
+      "source_files": [".github/workflows/deploy-production.yml", "scripts/deploy-iis.ps1"]
+    },
+    {
+      "id": "database_initialization",
+      "name": "Database initialization",
+      "type": "Application startup task",
+      "description": "SQL Server migrationまたは開発SQLite schema作成後、固定roleと任意bootstrap admin、架空demo dataをseedする。",
+      "inputs": ["provider", "connection string", "bootstrap settings", "environment"],
+      "outputs": ["schema", "roles", "optional admin/demo records"],
+      "source_files": ["src/DxPlatform.Infrastructure/Persistence/DatabaseInitializer.cs", "src/DxPlatform.Infrastructure/Persistence/Migrations/20260726090428_InitialSqlServer.cs"]
+    }
+  ],
+  "external_integrations": [
+    {
+      "id": "sql_server",
+      "name": "Microsoft SQL Server",
+      "type": "Production database",
+      "description": "EF Core migrationで本番schemaとIdentity/catalog/operations recordsを保持する。接続文字列は実行環境から注入する。",
+      "source_files": ["src/DxPlatform.Infrastructure/DependencyInjection.cs", "src/DxPlatform.Infrastructure/Persistence/Migrations/20260726090428_InitialSqlServer.cs", "docs/COMPANY_ENVIRONMENT_INPUTS.md"]
+    },
+    {
+      "id": "health_targets",
+      "name": "Registered application health URLs",
+      "type": "Outbound HTTP(S)",
+      "description": "許可されたhttp/https URLへtimeout付きGETを送りstatus、latency、error summaryのみ保存する。",
+      "source_files": ["src/DxPlatform.Infrastructure/Operations/OperationalServices.cs", "src/DxPlatform.Application/Validation/UrlSafetyValidator.cs", "src/DxPlatform.Web/Controllers/HealthChecksController.cs"]
+    },
+    {
+      "id": "github",
+      "name": "GitHub / GitHub Actions",
+      "type": "Source control and automation",
+      "description": "branch/PR、Windows CI artifact、protected deployment workflowを提供する。",
+      "source_files": [".github/workflows/ci.yml", ".github/workflows/deploy-staging.yml", ".github/workflows/deploy-production.yml"]
+    },
+    {
+      "id": "iis",
+      "name": "Windows Server IIS",
+      "type": "Hosting target",
+      "description": "ASP.NET Core Hosting Bundle配下でpublish artifactを実行する想定。site、app pool、path、certificateは会社環境で確定する。",
+      "source_files": ["scripts/deploy-iis.ps1", "scripts/rollback-iis.ps1", "docs/DEPLOYMENT.md", "docs/HANDOFF_TO_COMPANY.md"]
+    }
+  ],
+  "data_flows": [
+    {
+      "id": "authenticated_request",
+      "name": "画面request flow",
+      "type": "request/response",
+      "description": "Browser → HTTPS/Cookie → MVC controller → application/infrastructure → AppDbContext → SQL Server/SQLite → HTML/redirect。mutationはanti-forgeryとauditを伴う。",
+      "source_files": ["src/DxPlatform.Web/Program.cs", "src/DxPlatform.Web/Controllers/AdminAppsController.cs", "src/DxPlatform.Infrastructure/Persistence/AppDbContext.cs"]
+    },
+    {
+      "id": "effective_permission",
+      "name": "実効アプリ権限計算",
+      "type": "authorization",
+      "description": "SystemAdmin bypass → explicit user None deny → explicit user grant → active groupsの最大grant → grantなしNoneの順で決定し、list/detail/launch/manageで再利用する。",
+      "source_files": ["src/DxPlatform.Application/Security/PermissionEvaluator.cs", "src/DxPlatform.Infrastructure/Security/ApplicationAccessService.cs", "src/DxPlatform.Web/Controllers/AppsController.cs"]
+    },
+    {
+      "id": "catalog_mutation_audit",
+      "name": "台帳更新と監査",
+      "type": "transactional application flow",
+      "description": "管理form → server validation/concurrency token → entity save → actor/action/target/result/correlation summaryをAuditLogsへ追記。secret/PII本文は記録しない。",
+      "source_files": ["src/DxPlatform.Web/Controllers/AdminAppsController.cs", "src/DxPlatform.Infrastructure/Operations/OperationalServices.cs", "src/DxPlatform.Domain/Common/BaseEntity.cs"]
+    },
+    {
+      "id": "manual_health_check",
+      "name": "手動health check",
+      "type": "outbound observation",
+      "description": "許可ユーザー → health run → URL検証/cooldown → timeout付きHTTP GET → status/latency/error metadata保存 → audit/UI。response bodyは保存しない。",
+      "source_files": ["src/DxPlatform.Web/Controllers/HealthChecksController.cs", "src/DxPlatform.Infrastructure/Operations/OperationalServices.cs", "src/DxPlatform.Domain/Operations/OperationalEntities.cs"]
+    },
+    {
+      "id": "delivery_flow",
+      "name": "CI/CD flow",
+      "type": "build and deployment",
+      "description": "Feature commit → CI restore/build/test/publish → reviewed main/manual dispatch → self-hosted runner → backup/replace/start → readiness smoke → success record、失敗時rollback/failure record。",
+      "source_files": [".github/workflows/ci.yml", ".github/workflows/deploy-staging.yml", "scripts/deploy-iis.ps1", "scripts/smoke-test.ps1"]
+    },
+    {
+      "id": "deployment_registration_flow",
+      "name": "配備履歴登録",
+      "type": "machine-to-application API",
+      "description": "GitHub Actions → dedicated bearer token → Deployment API validation → application existence check → Deployments save → 201 response。",
+      "source_files": [".github/workflows/deploy-production.yml", "src/DxPlatform.Web/Controllers/DeploymentApiController.cs", "src/DxPlatform.Domain/Operations/OperationalEntities.cs"]
+    }
+  ],
+  "dependencies": [
+    {
+      "id": "dotnet_10",
+      "name": ".NET SDK/runtime 10",
+      "type": "runtime",
+      "description": "全projectのtarget frameworkとCI build runtime。",
+      "source_files": ["global.json", "Directory.Build.props", ".github/workflows/ci.yml"]
+    },
+    {
+      "id": "aspnet_identity",
+      "name": "ASP.NET Core Identity EF Core 10.0.10",
+      "type": "authentication/authorization",
+      "description": "ユーザー、role、password hashing、lockout、Cookie sign-inを提供する。",
+      "source_files": ["Directory.Packages.props", "src/DxPlatform.Infrastructure/DxPlatform.Infrastructure.csproj", "src/DxPlatform.Infrastructure/DependencyInjection.cs"]
+    },
+    {
+      "id": "ef_core",
+      "name": "EF Core SQL Server/SQLite 10.0.10",
+      "type": "ORM/database providers",
+      "description": "本番SQL Serverと開発・test SQLiteの共通永続化を提供する。",
+      "source_files": ["Directory.Packages.props", "src/DxPlatform.Infrastructure/DxPlatform.Infrastructure.csproj", "src/DxPlatform.Infrastructure/DependencyInjection.cs"]
+    },
+    {
+      "id": "sqlite_native",
+      "name": "SQLitePCLRaw.lib.e_sqlite3 2.1.12",
+      "type": "development/test native dependency",
+      "description": "既知脆弱性修正版へtransitive versionを固定したSQLite native library。",
+      "source_files": ["Directory.Packages.props", "src/DxPlatform.Infrastructure/DxPlatform.Infrastructure.csproj"]
+    },
+    {
+      "id": "xunit",
+      "name": "xUnit / Microsoft.NET.Test.Sdk",
+      "type": "test",
+      "description": "権限・validation unit testとWebApplicationFactory integration testを実行する。",
+      "source_files": ["Directory.Packages.props", "tests/DxPlatform.UnitTests/DxPlatform.UnitTests.csproj", "tests/DxPlatform.IntegrationTests/DxPlatform.IntegrationTests.csproj"]
+    },
+    {
+      "id": "bootstrap_jquery",
+      "name": "Bootstrap / jQuery validation",
+      "type": "vendored web assets",
+      "description": "MVC UIのresponsive layoutとclient-side validationを提供する。",
+      "source_files": ["src/DxPlatform.Web/Views/Shared/_Layout.cshtml", "src/DxPlatform.Web/wwwroot/lib/bootstrap/LICENSE", "src/DxPlatform.Web/wwwroot/lib/jquery/LICENSE.txt"]
+    }
+  ],
+  "risks_or_unknowns": [
+    {
+      "id": "company_sso",
+      "name": "会社SSO/MFA方式未確定",
+      "type": "identity handoff",
+      "description": "MVPは内部Identity。Entra ID等へ移行する場合はtenant、claim、break-glass、MFAとrole/group mappingを会社側で決定する。",
+      "source_files": ["docs/DECISIONS/0002-internal-authentication.md", "docs/HANDOFF_TO_COMPANY.md"]
+    },
+    {
+      "id": "company_iis_topology",
+      "name": "IIS/runner/network値未確定",
+      "type": "deployment handoff",
+      "description": "site/app pool/path/URL/certificate/firewall/proxy/service accountはplaceholderのままで、GitHub Environmentに登録する必要がある。",
+      "source_files": ["docs/COMPANY_ENVIRONMENT_INPUTS.md", "docs/DEPLOYMENT.md", ".github/workflows/deploy-production.yml"]
+    },
+    {
+      "id": "production_sql_compatibility",
+      "name": "会社SQL Server compatibility確認が必要",
+      "type": "database handoff",
+      "description": "初期migrationは生成済みだが、会社のcollation、TLS、backup、least privilege、HA、retention標準で承認が必要。",
+      "source_files": ["docs/COMPANY_COMPATIBILITY_CHECKLIST.md", "src/DxPlatform.Infrastructure/Persistence/Migrations/20260726090428_InitialSqlServer.cs"]
+    },
+    {
+      "id": "health_ssrf_scope",
+      "name": "health target network allowlist未実装",
+      "type": "security limitation",
+      "description": "URL scheme/userinfoは検証するが、会社network範囲に基づくDNS/IP allowlistは未確定。利用者を管理roleへ限定し、会社でegress policyを追加する。",
+      "source_files": ["src/DxPlatform.Application/Validation/UrlSafetyValidator.cs", "src/DxPlatform.Web/Controllers/HealthChecksController.cs", "docs/KNOWN_LIMITATIONS.md"]
+    },
+    {
+      "id": "manual_health_only",
+      "name": "定期health scheduler未実装",
+      "type": "MVP scope",
+      "description": "health checkは手動のみで、background schedulerやnotification escalationはroadmap扱い。",
+      "source_files": ["src/DxPlatform.Infrastructure/Operations/OperationalServices.cs", "docs/ROADMAP.md", "docs/KNOWN_LIMITATIONS.md"]
+    },
+    {
+      "id": "provider_differences",
+      "name": "SQLiteとSQL Serverのprovider差異",
+      "type": "test risk",
+      "description": "CI integration testはSQLite中心。SQL Server migrationをrelease前の会社互換性gateで検証する必要がある。",
+      "source_files": ["src/DxPlatform.Infrastructure/Persistence/AppDbContext.cs", "docs/TEST_PLAN.md", "docs/DECISIONS/0003-sql-server-and-development-sqlite.md"]
+    }
+  ],
+  "recommended_next_actions": [
+    {
+      "id": "approve_company_inputs",
+      "name": "会社環境入力を承認する",
+      "type": "handoff",
+      "description": "ownerを割り当て、DB/IIS/DNS/TLS/runner/secret/retention/SSO項目を埋める。",
+      "source_files": ["docs/COMPANY_ENVIRONMENT_INPUTS.md", "docs/HANDOFF_TO_COMPANY.md"]
+    },
+    {
+      "id": "protect_environments",
+      "name": "GitHub Environmentsとbranch protectionを設定する",
+      "type": "repository governance",
+      "description": "required CI、review、production approver、secret、runner labelを設定する。",
+      "source_files": [".github/workflows/ci.yml", ".github/workflows/deploy-production.yml", "docs/DEPLOYMENT.md"]
+    },
+    {
+      "id": "validate_sql_release",
+      "name": "会社標準SQL Serverでmigration rehearsalを行う",
+      "type": "release gate",
+      "description": "backup、migration、rollback/restore、collation/TLS/権限をstaging相当で検証する。",
+      "source_files": ["docs/COMPANY_COMPATIBILITY_CHECKLIST.md", "src/DxPlatform.Infrastructure/Persistence/Migrations/20260726090428_InitialSqlServer.cs"]
+    },
+    {
+      "id": "configure_iis_staging",
+      "name": "IIS staging smoke/rollback rehearsalを行う",
+      "type": "release gate",
+      "description": "self-hosted runner、Hosting Bundle、ACL、certificate、health URL、backup容量を確認する。",
+      "source_files": ["scripts/deploy-iis.ps1", "scripts/rollback-iis.ps1", "docs/DEPLOYMENT.md"]
+    },
+    {
+      "id": "threat_model_review",
+      "name": "SSRF/secret/PII threat modelを会社標準でレビューする",
+      "type": "security gate",
+      "description": "health target allowlist、log access/retention、audit export、credential rotationを確定する。",
+      "source_files": ["docs/SECURITY.md", "docs/HANDOFF_TO_COMPANY.md", "src/DxPlatform.Application/Validation/UrlSafetyValidator.cs"]
+    }
+  ]
+}

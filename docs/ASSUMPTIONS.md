@@ -11,5 +11,4 @@
 9. Deployment登録APIは設定された単一のBearer tokenをSHA-256で固定時間比較して認証する。tokenそのものはDB・ログへ保存しない。
 10. 設定画面は読み取り専用の安全な構成状態を表示し、秘密値を表示・編集しない。
 11. ファイルログは組み込みの差し替え可能なProviderで日次ファイルへ記録し、障害でアプリ本体を停止させない。
-12. ローカルSQL Server、IIS、Self-hosted Runnerは利用できないため、実機展開検証は会社作業とする。
-
+12. 開発用SQL Serverへの到達性、Migrations、Production readinessは架空DBで検証する。接続先の実値は記録しない。会社SQL Server標準、IIS、証明書、Self-hosted Runnerを使うend-to-end配備は会社作業とする。

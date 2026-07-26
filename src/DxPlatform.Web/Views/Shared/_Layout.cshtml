@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - DX共通アプリ基盤</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body>
+<header>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-semibold" asp-controller="Dashboard" asp-action="Index">DX共通アプリ基盤</a>
+            @if (User.Identity?.IsAuthenticated == true)
+            {
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav"
+                        aria-controls="mainNav" aria-expanded="false" aria-label="ナビゲーションを開く">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div id="mainNav" class="collapse navbar-collapse">
+                    <ul class="navbar-nav me-auto">
+                        <li class="nav-item"><a class="nav-link" asp-controller="Dashboard" asp-action="Index">ダッシュボード</a></li>
+                        <li class="nav-item"><a class="nav-link" asp-controller="Apps" asp-action="Index">アプリ</a></li>
+                        <li class="nav-item"><a class="nav-link" asp-controller="DataAssets" asp-action="Index">データ</a></li>
+                        <li class="nav-item"><a class="nav-link" asp-controller="Agents" asp-action="Index">Agent</a></li>
+                        <li class="nav-item"><a class="nav-link" asp-controller="Deployments" asp-action="Index">デプロイ</a></li>
+                        @if (User.IsInRole(RoleNames.SystemAdmin) || User.IsInRole(RoleNames.CatalogAdmin) || User.IsInRole(RoleNames.AppOwner))
+                        {
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">管理</a>
+                                <ul class="dropdown-menu">
+                                    <li><a class="dropdown-item" asp-controller="AdminApps" asp-action="Index">アプリ管理</a></li>
+                                    <li><a class="dropdown-item" asp-controller="HealthChecks" asp-action="Index">稼働確認</a></li>
+                                    @if (User.IsInRole(RoleNames.SystemAdmin))
+                                    {
+                                        <li><hr class="dropdown-divider" /></li>
+                                        <li><a class="dropdown-item" asp-controller="AdminUsers" asp-action="Index">ユーザー管理</a></li>
+                                        <li><a class="dropdown-item" asp-controller="AdminGroups" asp-action="Index">グループ管理</a></li>
+                                        <li><a class="dropdown-item" asp-controller="AdminPermissions" asp-action="Index">アプリ権限</a></li>
+                                        <li><a class="dropdown-item" asp-controller="AuditLogs" asp-action="Index">監査ログ</a></li>
+                                        <li><a class="dropdown-item" asp-controller="Settings" asp-action="Index">設定</a></li>
+                                    }
+                                </ul>
+                            </li>
+                        }
+                    </ul>
+                    <div class="d-flex align-items-center gap-2 text-white">
+                        <span class="small">@User.FindFirst("display_name")?.Value</span>
+                        <a class="btn btn-outline-light btn-sm" asp-controller="Account" asp-action="ChangePassword">パスワード変更</a>
+                        <form asp-controller="Account" asp-action="Logout" method="post">
+                            <button class="btn btn-light btn-sm" type="submit">ログアウト</button>
+                        </form>
+                    </div>
+                </div>
+            }
+        </div>
+    </nav>
+</header>
+<main class="container-fluid page-container" role="main">
+    @if (User.Identity?.IsAuthenticated == true)
+    {
+        <nav aria-label="パンくず" class="small text-secondary mb-3">
+            <a asp-controller="Dashboard" asp-action="Index">ホーム</a>
+            <span aria-hidden="true"> / </span>
+            <span aria-current="page">@ViewData["Title"]</span>
+        </nav>
+    }
+    <partial name="_Alerts" />
+    @RenderBody()
+</main>
+<footer class="border-top py-3 text-secondary small">
+    <div class="container-fluid">DX共通アプリ基盤 — 架空デモデータ専用のMVP</div>
+</footer>
+<script src="~/lib/jquery/dist/jquery.min.js"></script>
+<script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+<script src="~/js/site.js" asp-append-version="true"></script>
+@await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>
+

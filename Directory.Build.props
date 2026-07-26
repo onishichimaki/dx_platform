@@ -1,0 +1,12 @@
+<Project>
+  <PropertyGroup>
+    <!-- 会社承認済みFrameworkへ変更する場合は、互換性確認後にここだけを変更する。 -->
+    <DxTargetFramework>net10.0</DxTargetFramework>
+    <TargetFramework>$(DxTargetFramework)</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+</Project>
+

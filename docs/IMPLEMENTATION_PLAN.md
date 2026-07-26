@@ -29,7 +29,7 @@
 ## リスクと対策
 
 - ローカル端末に.NET 10がない: 公式`dotnet-install`で`.dotnet`へ非管理者導入し、`global.json`で固定する。
-- SQL Server実機がない: SQL Server Migration生成は行い、機能テストはSQLiteで実施する。会社でMigration実行を検証する。
+- 会社SQL Server環境はない: 開発用SQL Server 16.xでMigrations適用とProduction readinessを検証し、会社固有のversion/collation/TLS/権限/HAは会社で再検証する。
 - SQLiteとSQL Serverの差異: DB固有SQLを避け、ProductionのSQLite起動を拒否する。
 - IIS/Runnerへ接続できない: スクリプトの構文と引数を検証し、実配置は会社チェックリストへ明記する。
 - 全画面の複雑化: 共通Controller/View部品と単純なMVCフォームで保守性を優先する。
@@ -37,4 +37,3 @@
 ## 会社でしかできない作業
 
 SQL Server/IIS/証明書/サービスアカウント/会社GitHub/Environment/Runner/Secrets/通知/バックアップ/監視の設定、実データ投入、UAT、セキュリティ・ライセンス・本番移行承認は会社で行う。
-

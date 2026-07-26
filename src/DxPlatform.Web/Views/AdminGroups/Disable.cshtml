@@ -1,0 +1,6 @@
+@model Group
+@{ ViewData["Title"] = "グループ無効化"; }
+<h1 class="h2">グループを無効化しますか</h1>
+<div class="alert alert-warning"><strong>@Model.Name</strong>（@Model.Code）による権限付与が無効になります。履歴は削除されません。</div>
+<form method="post"><button class="btn btn-danger" type="submit">無効化する</button> <a class="btn btn-outline-secondary" asp-action="Index">キャンセル</a></form>
+

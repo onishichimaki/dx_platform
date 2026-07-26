@@ -1,0 +1,6 @@
+@model ApplicationPermission
+@{ ViewData["Title"] = "アプリ権限解除"; }
+<h1 class="h2">アプリ権限を解除しますか</h1>
+<div class="alert alert-warning"><strong>@Model.ApplicationAsset.Name</strong> の @Model.Level 権限設定を無効化します。</div>
+<form method="post"><button class="btn btn-danger" type="submit">解除する</button> <a class="btn btn-outline-secondary" asp-action="Index" asp-route-applicationId="@Model.ApplicationAssetId">キャンセル</a></form>
+

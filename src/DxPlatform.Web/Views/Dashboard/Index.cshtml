@@ -1,0 +1,38 @@
+@model DashboardViewModel
+@{ ViewData["Title"] = "ダッシュボード"; }
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div><h1 class="h2 mb-1">ダッシュボード</h1><p class="text-secondary mb-0">登録状況と要確認項目をまとめて確認できます。</p></div>
+</div>
+<div class="row g-3 mb-4">
+    @foreach (var metric in new[] {
+        ("登録アプリ", Model.ApplicationCount, "primary"),
+        ("本番アプリ", Model.ProductionApplicationCount, "success"),
+        ("データ資産", Model.DataAssetCount, "info"),
+        ("Agent", Model.AgentCount, "secondary"),
+        ("停止中資産", Model.SuspendedAssetCount, "warning"),
+        ("責任者未設定", Model.MissingManagerCount, "danger"),
+        ("機密区分未設定", Model.MissingConfidentialityCount, "danger"),
+        ("最終確認日超過", Model.OverdueReviewCount, "warning") })
+    {
+        <div class="col-6 col-md-3"><div class="card metric-card h-100"><div class="card-body"><div class="text-secondary">@metric.Item1</div><div class="metric-value">@metric.Item2</div><span class="text-@metric.Item3 small">件</span></div></div></div>
+    }
+</div>
+<div class="row g-3">
+    <div class="col-lg-7">
+        <div class="card"><div class="card-header fw-semibold">直近のデプロイ履歴</div><div class="table-responsive">
+            <table class="table table-sm mb-0"><thead><tr><th>開始日時</th><th>アプリ</th><th>バージョン</th><th>環境</th><th>結果</th></tr></thead><tbody>
+            @foreach (var item in Model.RecentDeployments) { <tr><td>@item.StartedAt.ToLocalTime().ToString("yyyy/MM/dd HH:mm")</td><td>@item.ApplicationAsset.Name</td><td>@item.Version</td><td>@item.Environment</td><td>@item.Result</td></tr> }
+            @if (Model.RecentDeployments.Count == 0) { <tr><td colspan="5" class="text-center text-secondary">履歴はありません。</td></tr> }
+            </tbody></table>
+        </div></div>
+    </div>
+    <div class="col-lg-5">
+        <div class="card"><div class="card-header fw-semibold">直近の管理操作</div><div class="table-responsive">
+            <table class="table table-sm mb-0"><thead><tr><th>日時</th><th>操作</th><th>結果</th></tr></thead><tbody>
+            @foreach (var item in Model.RecentAuditLogs) { <tr><td>@item.OccurredAt.ToLocalTime().ToString("MM/dd HH:mm")</td><td>@item.ActionType</td><td>@(item.Succeeded ? "成功" : "失敗")</td></tr> }
+            @if (Model.RecentAuditLogs.Count == 0) { <tr><td colspan="3" class="text-center text-secondary">表示できる履歴はありません。</td></tr> }
+            </tbody></table>
+        </div></div>
+    </div>
+</div>
+

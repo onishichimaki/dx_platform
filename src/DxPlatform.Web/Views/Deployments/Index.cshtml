@@ -1,0 +1,12 @@
+@model IReadOnlyList<Deployment>
+@{
+    ViewData["Title"] = "デプロイ履歴";
+    var apps = ViewBag.Applications as IEnumerable<ApplicationAsset> ?? Enumerable.Empty<ApplicationAsset>();
+}
+<h1 class="h2">デプロイ履歴</h1><p class="text-secondary">GitHub Actionsまたは承認済みデプロイスクリプトから登録された履歴です。秘密情報は保存しません。</p>
+<form method="get" class="form-section"><div class="row g-2 align-items-end"><div class="col-md-6"><label for="applicationId" class="form-label">アプリ</label><select id="applicationId" name="applicationId" class="form-select"><option value="">すべて</option>@foreach (var app in apps) { <option value="@app.Id" selected="@(ViewBag.ApplicationId?.ToString() == app.Id.ToString())">@app.Name</option> }</select></div><div class="col-md-4"><label for="environment" class="form-label">環境</label><input id="environment" name="environment" value="@ViewBag.Environment" class="form-control" /></div><div class="col-md-2"><button class="btn btn-primary w-100">検索</button></div></div></form>
+<div class="table-responsive"><table class="table table-hover align-middle"><thead><tr><th>開始</th><th>アプリ</th><th>バージョン</th><th>Commit</th><th>ブランチ</th><th>環境</th><th>実行者</th><th>結果</th></tr></thead><tbody>
+@foreach (var item in Model) { <tr><td>@item.StartedAt.ToLocalTime().ToString("yyyy/MM/dd HH:mm")</td><td>@item.ApplicationAsset.Name</td><td>@item.Version</td><td><code>@item.GitCommitSha[..Math.Min(12, item.GitCommitSha.Length)]</code></td><td>@(item.Branch ?? "-")</td><td>@item.Environment</td><td>@item.ExecutedBy</td><td><strong>@item.Result</strong></td></tr> }
+@if (Model.Count == 0) { <tr><td colspan="8"><div class="empty-state">デプロイ履歴はありません。</div></td></tr> }
+</tbody></table></div>
+

@@ -1,0 +1,12 @@
+@model IReadOnlyList<HealthCheckResult>
+@{
+    ViewData["Title"] = "稼働確認";
+    var apps = ViewBag.Applications as IEnumerable<ApplicationAsset> ?? Enumerable.Empty<ApplicationAsset>();
+}
+<h1 class="h2">手動稼働確認</h1><p class="text-secondary">登録済みヘルスチェックURLへ、管理者の操作時だけアクセスします。同一アプリは30秒以上空けてください。</p>
+<div class="form-section"><h2 class="h4">実行対象</h2><div class="d-flex flex-wrap gap-2">@foreach (var app in apps) { <form asp-action="Run" asp-route-applicationId="@app.Id" method="post"><button class="btn btn-outline-primary">@app.Name を確認</button></form> } @if (!apps.Any()) { <span class="text-secondary">ヘルスチェックURLが登録されたアプリはありません。</span> }</div></div>
+<div class="table-responsive"><table class="table table-hover align-middle"><thead><tr><th>確認日時</th><th>アプリ</th><th>結果</th><th>HTTP</th><th>応答時間</th><th>エラー要約</th></tr></thead><tbody>
+@foreach (var item in Model) { <tr><td>@item.CheckedAt.ToLocalTime().ToString("yyyy/MM/dd HH:mm:ss")</td><td>@item.ApplicationAsset.Name</td><td><strong>@item.Status</strong></td><td>@(item.HttpStatusCode?.ToString() ?? "-")</td><td>@item.ResponseTimeMilliseconds ms</td><td>@(item.ErrorSummary ?? "-")</td></tr> }
+@if (Model.Count == 0) { <tr><td colspan="6" class="text-center text-secondary">実行履歴はありません。</td></tr> }
+</tbody></table></div>
+

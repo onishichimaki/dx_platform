@@ -1,0 +1,8 @@
+@model IReadOnlyList<Group>
+@{ ViewData["Title"] = "グループ管理"; }
+<div class="d-flex justify-content-between align-items-center mb-3"><div><h1 class="h2">グループ管理</h1><p class="text-secondary mb-0">権限をまとめて割り当てる利用者グループです。</p></div><a class="btn btn-primary" asp-action="Create">新規登録</a></div>
+<form method="get" class="form-section"><div class="input-group"><input name="keyword" value="@ViewBag.Keyword" class="form-control" aria-label="検索キーワード" placeholder="コード、名称、説明" /><button class="btn btn-primary">検索</button></div></form>
+<div class="table-responsive"><table class="table table-hover align-middle"><thead><tr><th>コード</th><th>名称</th><th>説明</th><th>有効メンバー</th><th>状態</th><th>操作</th></tr></thead><tbody>
+@foreach (var item in Model) { <tr><td><code>@item.Code</code></td><td>@item.Name</td><td>@(item.Description ?? "-")</td><td>@item.Members.Count(x => x.IsActive)</td><td>@(item.IsActive ? "有効" : "無効")</td><td><a class="btn btn-outline-primary btn-sm" asp-action="Edit" asp-route-id="@item.Id">編集</a> @if (item.IsActive) { <a class="btn btn-outline-danger btn-sm" asp-action="Disable" asp-route-id="@item.Id">無効化</a> }</td></tr> }
+</tbody></table></div>
+

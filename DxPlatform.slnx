@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/DxPlatform.Application/DxPlatform.Application.csproj" />
+    <Project Path="src/DxPlatform.Domain/DxPlatform.Domain.csproj" />
+    <Project Path="src/DxPlatform.Infrastructure/DxPlatform.Infrastructure.csproj" />
+    <Project Path="src/DxPlatform.Web/DxPlatform.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/DxPlatform.IntegrationTests/DxPlatform.IntegrationTests.csproj" />
+    <Project Path="tests/DxPlatform.UnitTests/DxPlatform.UnitTests.csproj" />
+  </Folder>
+</Solution>

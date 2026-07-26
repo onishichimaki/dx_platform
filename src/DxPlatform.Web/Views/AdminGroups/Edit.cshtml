@@ -1,0 +1,20 @@
+@model GroupEditViewModel
+@{
+    ViewData["Title"] = Model.Id.HasValue ? "グループ編集" : "グループ登録";
+    var users = ViewBag.AllUsers as IEnumerable<ApplicationUser> ?? Enumerable.Empty<ApplicationUser>();
+}
+<h1 class="h2">@ViewData["Title"]</h1>
+<form method="post" class="form-section">
+    <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+    <input asp-for="Id" type="hidden" /><input asp-for="RowVersion" type="hidden" />
+    <div class="row g-3">
+        <div class="col-md-4"><label asp-for="Code" class="form-label required-label"></label><input asp-for="Code" class="form-control" /><span asp-validation-for="Code" class="text-danger"></span></div>
+        <div class="col-md-8"><label asp-for="Name" class="form-label required-label"></label><input asp-for="Name" class="form-control" /><span asp-validation-for="Name" class="text-danger"></span></div>
+        <div class="col-12"><label asp-for="Description" class="form-label"></label><textarea asp-for="Description" class="form-control" rows="3"></textarea></div>
+        <div class="col-md-3"><div class="form-check"><input asp-for="IsActive" class="form-check-input" /><label asp-for="IsActive" class="form-check-label"></label></div></div>
+        <div class="col-12"><label asp-for="SelectedUserIds" class="form-label"></label><select asp-for="SelectedUserIds" class="form-select" multiple size="8">@foreach (var user in users) { <option value="@user.Id">@user.DisplayName — @user.Email</option> }</select><div class="form-text">Ctrlキーを押しながら複数選択できます。</div></div>
+    </div>
+    <div class="mt-3 d-flex gap-2"><button class="btn btn-primary" type="submit">保存</button><a class="btn btn-outline-secondary" asp-action="Index">キャンセル</a></div>
+</form>
+@section Scripts { <partial name="_ValidationScriptsPartial" /> }
+

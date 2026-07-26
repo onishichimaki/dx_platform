@@ -1,0 +1,17 @@
+html { font-size: 14px; }
+@media (min-width: 768px) { html { font-size: 16px; } }
+body { background: #f5f7fa; color: #1f2937; min-height: 100vh; }
+.page-container { max-width: 1440px; padding: 1.5rem; min-height: calc(100vh - 130px); }
+.navbar-brand { letter-spacing: .02em; }
+.card { border: 1px solid #dbe3ec; box-shadow: 0 1px 2px rgb(15 23 42 / 5%); }
+.metric-card .metric-value { font-size: 2rem; font-weight: 700; color: #123c69; }
+.table { background: #fff; }
+.table thead th { background: #eaf0f6; color: #243b53; white-space: nowrap; }
+.table-responsive { border-radius: .375rem; }
+.required-label::after { content: " 必須"; color: #b42318; font-size: .75rem; }
+.form-section { background: #fff; border: 1px solid #dbe3ec; border-radius: .5rem; padding: 1.25rem; margin-bottom: 1rem; }
+.detail-list dt { color: #526579; font-weight: 600; }
+.status-badge { display: inline-block; border: 1px solid currentColor; border-radius: 999px; padding: .15rem .55rem; font-size: .8rem; }
+.empty-state { padding: 2rem; text-align: center; color: #60758a; background: #fff; border: 1px dashed #b8c7d9; }
+a:focus, button:focus, input:focus, select:focus, textarea:focus { outline: 3px solid #ffbf47 !important; outline-offset: 2px; }
+

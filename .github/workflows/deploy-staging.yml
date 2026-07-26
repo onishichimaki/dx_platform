@@ -1,0 +1,100 @@
+name: Deploy Staging
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: ${{ vars.ENABLE_STAGING_DEPLOY == 'true' }}
+    runs-on: [self-hosted, windows, '${{ vars.IIS_RUNNER_LABEL }}']
+    timeout-minutes: 30
+    environment: staging
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Validate configuration
+        shell: pwsh
+        env:
+          API_TOKEN: ${{ secrets.PORTAL_DEPLOYMENT_API_TOKEN }}
+        run: |
+          $required = @{
+            IIS_SITE_NAME = '${{ vars.IIS_SITE_NAME }}'
+            IIS_APP_POOL_NAME = '${{ vars.IIS_APP_POOL_NAME }}'
+            IIS_DEPLOY_PATH = '${{ vars.IIS_DEPLOY_PATH }}'
+            IIS_BACKUP_PATH = '${{ vars.IIS_BACKUP_PATH }}'
+            PORTAL_BASE_URL = '${{ vars.PORTAL_BASE_URL }}'
+            PORTAL_DEPLOYMENT_API_URL = '${{ vars.PORTAL_DEPLOYMENT_API_URL }}'
+            PORTAL_APPLICATION_ASSET_ID = '${{ vars.PORTAL_APPLICATION_ASSET_ID }}'
+            PORTAL_DEPLOYMENT_API_TOKEN = $env:API_TOKEN
+          }
+          $missing = $required.GetEnumerator() | Where-Object { [string]::IsNullOrWhiteSpace($_.Value) }
+          if ($missing) { throw "Missing deployment settings: $($missing.Name -join ', ')" }
+
+      - name: Build and test
+        run: |
+          dotnet restore DxPlatform.slnx
+          dotnet build DxPlatform.slnx -c Release --no-restore
+          dotnet test DxPlatform.slnx -c Release --no-build
+
+      - name: Publish and package
+        shell: pwsh
+        run: |
+          dotnet publish src/DxPlatform.Web/DxPlatform.Web.csproj -c Release --no-restore -o artifacts/publish
+          Compress-Archive -Path artifacts/publish/* -DestinationPath artifacts/dx-platform.zip -Force
+
+      - name: Deploy to IIS
+        id: deploy
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $backup = & scripts/deploy-iis.ps1 `
+            -PackagePath artifacts/dx-platform.zip `
+            -SiteName '${{ vars.IIS_SITE_NAME }}' `
+            -AppPoolName '${{ vars.IIS_APP_POOL_NAME }}' `
+            -DeployPath '${{ vars.IIS_DEPLOY_PATH }}' `
+            -BackupPath '${{ vars.IIS_BACKUP_PATH }}' `
+            -BaseUrl '${{ vars.PORTAL_BASE_URL }}' `
+            -Confirm:$false
+          "backup_path=$backup" >> $env:GITHUB_OUTPUT
+
+      - name: Register deployment history
+        if: ${{ always() && steps.deploy.outcome != 'skipped' }}
+        shell: pwsh
+        env:
+          API_TOKEN: ${{ secrets.PORTAL_DEPLOYMENT_API_TOKEN }}
+        run: |
+          $result = if ('${{ steps.deploy.outcome }}' -eq 'success') { 'Succeeded' } else { 'Failed' }
+          $body = @{
+            applicationAssetId = '${{ vars.PORTAL_APPLICATION_ASSET_ID }}'
+            version = '${{ github.run_number }}'
+            gitCommitSha = '${{ github.sha }}'
+            branch = '${{ github.ref_name }}'
+            executedBy = '${{ github.actor }}'
+            startedAt = [DateTimeOffset]::UtcNow
+            finishedAt = [DateTimeOffset]::UtcNow
+            result = $result
+            environment = 'Staging'
+            logReference = '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}'
+            notes = "Backup: ${{ steps.deploy.outputs.backup_path }}"
+          } | ConvertTo-Json
+          Invoke-RestMethod `
+            -Method Post `
+            -Uri '${{ vars.PORTAL_DEPLOYMENT_API_URL }}' `
+            -Headers @{ Authorization = "Bearer $env:API_TOKEN" } `
+            -ContentType 'application/json' `
+            -Body $body
+
+      - name: Fail when deployment failed
+        if: ${{ steps.deploy.outcome != 'success' }}
+        shell: pwsh
+        run: throw 'IIS deployment failed and rollback was attempted.'

@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>DX共通アプリ基盤 — Architecture</title>
+  <style>
+    :root{--navy:#172b4d;--blue:#1769aa;--blue2:#e8f2fb;--ink:#263648;--muted:#64748b;--line:#d9e3ee;--bg:#f4f7fb;--card:#fff;--green:#18794e;--amber:#946200;--red:#b42318;--shadow:0 10px 30px rgba(23,43,77,.08)}
+    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 system-ui,-apple-system,"Segoe UI","Yu Gothic UI",sans-serif}
+    header{background:#fff;border-bottom:1px solid var(--line)} .hero{max-width:1260px;margin:auto;padding:34px 28px 26px}
+    .eyebrow{color:var(--blue);font-weight:700;letter-spacing:.08em;text-transform:uppercase}.hero h1{font-size:34px;line-height:1.2;margin:7px 0;color:var(--navy)}
+    .hero p{max-width:820px;color:var(--muted);font-size:15px;margin:0}.facts{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px}
+    .fact{border:1px solid var(--line);border-radius:12px;padding:10px 14px;background:#fbfdff}.fact b{color:var(--navy)}
+    nav{position:sticky;top:0;z-index:3;background:rgba(255,255,255,.94);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+    .tabs{max-width:1260px;margin:auto;padding:0 28px;display:flex;overflow:auto}.tab{appearance:none;border:0;border-bottom:3px solid transparent;background:transparent;padding:15px 16px;color:var(--muted);font-weight:650;cursor:pointer;white-space:nowrap}.tab.active{color:var(--blue);border-color:var(--blue)}
+    main{max-width:1260px;margin:auto;padding:24px 28px 48px}.pane{display:none}.pane.active{display:block}.split{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(300px,.85fr);gap:20px}
+    .panel{background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:20px}.panel h2{color:var(--navy);font-size:18px;margin:0 0 4px}.hint{color:var(--muted);margin:0 0 18px}
+    .stack{display:grid;gap:12px}.layer{border:1px solid var(--line);border-radius:14px;padding:14px;background:#fbfdff}.layer-title{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:9px}.nodes{display:flex;flex-wrap:wrap;gap:8px}
+    .node{border:1px solid #bfd3e5;border-radius:10px;background:white;color:var(--navy);font-weight:650;padding:9px 11px;cursor:pointer;text-align:left}.node:hover,.node.selected{border-color:var(--blue);background:var(--blue2);box-shadow:0 0 0 2px rgba(23,105,170,.08)}
+    .flow{display:grid;grid-template-columns:repeat(5,minmax(100px,1fr));gap:22px;margin:20px 0}.flow .node{position:relative;text-align:center}.flow .node:not(:last-child)::after{content:"→";position:absolute;right:-19px;color:var(--blue);font-size:18px;top:7px}
+    .detail{position:sticky;top:76px;align-self:start;min-height:325px}.detail h3{font-size:20px;color:var(--navy);margin:0 0 5px}.kind{display:inline-block;color:var(--blue);background:var(--blue2);border-radius:999px;padding:3px 9px;font-size:12px;font-weight:700}.detail p{color:var(--muted)}
+    .sources{margin:14px 0 0;padding:0;list-style:none}.sources li{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;background:#f6f8fa;border:1px solid #e5eaf0;border-radius:8px;padding:7px 9px;margin:6px 0;overflow-wrap:anywhere;font-size:12px}
+    .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px;box-shadow:0 6px 20px rgba(23,43,77,.05)}.card h3{font-size:15px;color:var(--navy);margin:0 0 6px}.card p{color:var(--muted);margin:0}.card button{width:100%;text-align:left;border:0;background:none;padding:0;cursor:pointer;font:inherit}
+    .badge{display:inline-block;border-radius:999px;padding:3px 8px;margin-bottom:9px;background:#edf4fa;color:var(--blue);font-size:11px;font-weight:750}.badge.green{background:#e9f7ef;color:var(--green)}.badge.amber{background:#fff5d9;color:var(--amber)}.badge.red{background:#feeceb;color:var(--red)}
+    .table-wrap{overflow:auto}.matrix{width:100%;border-collapse:collapse}.matrix th,.matrix td{border-bottom:1px solid var(--line);padding:10px;text-align:left;vertical-align:top}.matrix th{color:var(--navy);background:#f8fafc}.matrix code{font-size:12px}
+    .callout{border-left:4px solid var(--blue);background:var(--blue2);border-radius:8px;padding:12px 14px;margin:16px 0}.legend{display:flex;gap:12px;flex-wrap:wrap;margin-top:14px;color:var(--muted)}.dot:before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--blue);margin-right:6px}.dot.company:before{background:var(--amber)}
+    footer{max-width:1260px;margin:auto;padding:0 28px 32px;color:var(--muted);font-size:12px}
+    @media(max-width:900px){.split{grid-template-columns:1fr}.detail{position:static}.grid{grid-template-columns:1fr 1fr}.flow{grid-template-columns:1fr}.flow .node:not(:last-child)::after{content:"↓";right:auto;left:50%;top:auto;bottom:-23px}}
+    @media(max-width:600px){.hero,main{padding-left:16px;padding-right:16px}.tabs{padding:0 8px}.grid{grid-template-columns:1fr}.hero h1{font-size:27px}}
+  </style>
+</head>
+<body>
+<header><div class="hero">
+  <div class="eyebrow">Repository architecture · 2026-07-26</div>
+  <h1>DX共通アプリ基盤</h1>
+  <p>社内のアプリ、データ、Agent、Tool と運用履歴を、安全な認証・資産単位権限・監査の下で一元化するモジュラーモノリス。表示内容はリポジトリの現行実装を根拠にしています。</p>
+  <div class="facts"><div class="fact"><b>.NET 10</b> / ASP.NET Core MVC</div><div class="fact"><b>SQL Server</b> production · SQLite dev/test</div><div class="fact"><b>4 layers</b> Domain → Application → Infrastructure → Web</div></div>
+</div></header>
+<nav><div class="tabs" role="tablist"><button class="tab active" data-pane="overview">全体</button><button class="tab" data-pane="surface">画面/API/DB</button><button class="tab" data-pane="delivery">CI/CD</button><button class="tab" data-pane="external">外部連携</button><button class="tab" data-pane="risks">リスク</button></div></nav>
+<main>
+  <section id="overview" class="pane active"><div class="split">
+    <div class="panel"><h2>実行アーキテクチャ</h2><p class="hint">ノードを選択すると根拠ファイルと責務を確認できます。</p>
+      <div class="stack">
+        <div class="layer"><div class="layer-title">Clients & automation</div><div class="nodes"><button class="node" data-id="browser">社内 Browser</button><button class="node" data-id="actions">GitHub Actions</button></div></div>
+        <div class="layer"><div class="layer-title">Web · presentation and security boundary</div><div class="nodes"><button class="node" data-id="web">MVC / Razor</button><button class="node" data-id="identity">Identity Cookie</button><button class="node" data-id="api">Deployment API</button><button class="node" data-id="health">Health endpoints</button></div></div>
+        <div class="layer"><div class="layer-title">Application · deterministic rules</div><div class="nodes"><button class="node" data-id="permission">Permission evaluator</button><button class="node" data-id="validation">Lifecycle / URL validation</button><button class="node" data-id="contracts">Operational contracts</button></div></div>
+        <div class="layer"><div class="layer-title">Domain & infrastructure</div><div class="nodes"><button class="node" data-id="domain">Asset domain</button><button class="node" data-id="ef">EF Core / Identity stores</button><button class="node" data-id="audit">Audit & health services</button></div></div>
+        <div class="layer"><div class="layer-title">Persistence</div><div class="nodes"><button class="node" data-id="sql">SQL Server（本番）</button><button class="node" data-id="sqlite">SQLite（開発・test）</button></div></div>
+      </div>
+      <div class="legend"><span class="dot">リポジトリで実装済み</span><span class="dot company">会社環境で入力・承認が必要</span></div>
+    </div>
+    <aside class="panel detail" id="detail"><span class="kind">Architecture</span><h3>ノードを選択</h3><p>左の構成要素を選ぶと、責務とソース根拠を表示します。</p><ul class="sources"><li>docs/architecture.json</li></ul></aside>
+  </div>
+  <div class="panel" style="margin-top:20px"><h2>主要request flow</h2><div class="flow"><button class="node" data-id="browser">Browser</button><button class="node" data-id="web">MVC controller</button><button class="node" data-id="permission">認可・validation</button><button class="node" data-id="ef">AppDbContext</button><button class="node" data-id="sql">SQL Server</button></div><div class="callout"><b>認可の要点:</b> SystemAdmin → user explicit None → user grant → active group grants の最大値 → grantなし None。一覧だけでなく詳細・起動・管理操作でも再判定します。</div></div>
+  </section>
+
+  <section id="surface" class="pane"><div class="grid">
+    <div class="card"><button data-id="account"><span class="badge">画面</span><h3>ログイン / パスワード</h3><p>内部Identity、lockout、無効user再検証。</p></button></div>
+    <div class="card"><button data-id="apps"><span class="badge">画面</span><h3>アプリ台帳</h3><p>権限filterした一覧・詳細・安全な起動。</p></button></div>
+    <div class="card"><button data-id="admin"><span class="badge">画面</span><h3>管理画面</h3><p>user/group/grant、アプリ・データ・Agent/Tool。</p></button></div>
+    <div class="card"><button data-id="ops"><span class="badge">画面</span><h3>運用画面</h3><p>deployment、manual health、audit、settings。</p></button></div>
+    <div class="card"><button data-id="api"><span class="badge green">API</span><h3>POST /api/deployments</h3><p>専用Bearer tokenで配備結果を登録。</p></button></div>
+    <div class="card"><button data-id="health"><span class="badge green">API</span><h3>/health/live · /ready</h3><p>IIS smoke testとDB readiness。</p></button></div>
+  </div>
+  <div class="panel" style="margin-top:20px"><h2>Database inventory</h2><p class="hint">全entityは同じAppDbContextとinitial SQL Server migrationで管理します。</p><div class="table-wrap"><table class="matrix"><thead><tr><th>領域</th><th>主テーブル</th><th>関係</th></tr></thead><tbody>
+    <tr><td>Identity / authorization</td><td><code>AspNetUsers, AspNetRoles, Groups, GroupMembers, ApplicationPermissions</code></td><td>User/Group → app grant</td></tr>
+    <tr><td>Catalog</td><td><code>ApplicationAssets, DataAssets, AgentAssets, ToolAssets</code></td><td>join tablesで利用関係を表現</td></tr>
+    <tr><td>Lineage / classification</td><td><code>DataAssetRelations, Tags, AssetTags</code></td><td>source→target、cross-asset tag</td></tr>
+    <tr><td>Operations</td><td><code>Deployments, HealthCheckResults, AuditLogs</code></td><td>ApplicationAssetへ履歴を集約</td></tr>
+  </tbody></table></div><button class="node" data-id="dbmodel" style="margin-top:14px">DBモデルの根拠を見る</button></div>
+  </section>
+
+  <section id="delivery" class="pane"><div class="panel"><h2>Build → release → rollback</h2><p class="hint">会社固有値はGitHub Environmentから注入し、リポジトリに保存しません。</p><div class="flow"><button class="node" data-id="commit">Feature / PR</button><button class="node" data-id="ci">Windows CI</button><button class="node" data-id="artifact">Publish ZIP</button><button class="node" data-id="iis">IIS deploy + smoke</button><button class="node" data-id="deployment-record">履歴登録</button></div></div>
+  <div class="grid" style="margin-top:20px"><div class="card"><button data-id="ci"><span class="badge green">自動</span><h3>CI</h3><p>restore、Release build、unit/integration test、publish、TRX/ZIP upload。</p></button></div><div class="card"><button data-id="staging"><span class="badge amber">条件付き</span><h3>Staging</h3><p>self-hosted Windows runner。明示的なenable変数が必要。</p></button></div><div class="card"><button data-id="production"><span class="badge red">承認</span><h3>Production</h3><p>workflow_dispatch + protected Environment approval。</p></button></div></div>
+  <div class="callout"><b>失敗時:</b> 配備前のtimestamp backupがあれば自動restoreして再起動。初回配備でbackupがなければIIS site/app poolを停止し、障害状態の公開を避けます。</div></section>
+
+  <section id="external" class="pane"><div class="grid">
+    <div class="card"><button data-id="sql"><span class="badge amber">会社入力</span><h3>SQL Server</h3><p>接続文字列、TLS、collation、backup、権限は環境注入・承認。</p></button></div>
+    <div class="card"><button data-id="github"><span class="badge">SaaS</span><h3>GitHub</h3><p>source、PR、Actions、Environment、artifact。</p></button></div>
+    <div class="card"><button data-id="iis"><span class="badge amber">会社入力</span><h3>Windows Server / IIS</h3><p>runner、Hosting Bundle、site、pool、ACL、certificate。</p></button></div>
+    <div class="card"><button data-id="targets"><span class="badge red">Outbound</span><h3>登録済みhealth URL</h3><p>timeout付きHTTP(S) GET。bodyやcredentialは保存しない。</p></button></div>
+  </div><div class="callout">実サーバー名、DB名、URL、credential、certificate、会社名は構成ファイルに固定しません。必要値は <code>COMPANY_ENVIRONMENT_INPUTS.md</code> と GitHub Environment で引き渡します。</div></section>
+
+  <section id="risks" class="pane"><div class="grid">
+    <div class="card"><span class="badge amber">Identity</span><h3>SSO/MFA未確定</h3><p>MVPは内部Identity。会社IdPのtenant/claim/group mappingが次のdecision gate。</p></div>
+    <div class="card"><span class="badge red">Security</span><h3>health allowlist</h3><p>scheme/userinfo検証は実装済み。会社networkに基づくDNS/IP egress allowlistは未確定。</p></div>
+    <div class="card"><span class="badge amber">Database</span><h3>Provider差異</h3><p>CIはSQLite中心。SQL Server migration rehearsalをrelease gateにする。</p></div>
+    <div class="card"><span class="badge amber">Operations</span><h3>定期監視なし</h3><p>MVPのhealth checkは手動。scheduler/notificationはroadmap。</p></div>
+    <div class="card"><span class="badge amber">Delivery</span><h3>IIS topology未確定</h3><p>runner/site/path/TLS/ACL/proxyを会社stagingで承認する。</p></div>
+    <div class="card"><span class="badge">Governance</span><h3>本番判定</h3><p>branch protection、Environment approver、retention、DR、OSS reviewが必要。</p></div>
+  </div><div class="panel" style="margin-top:20px"><h2>推奨する次の5アクション</h2><ol><li>会社環境入力票へownerと承認者を割り当てる。</li><li>branch protectionとGitHub Environmentsを設定する。</li><li>会社標準SQL Serverでmigration/restore rehearsalを行う。</li><li>IIS stagingでsmoke/rollbackを通す。</li><li>SSRF、secret、PII、audit retentionのsecurity reviewを行う。</li></ol></div></section>
+</main>
+<footer>Machine-readable source: <code>docs/architecture.json</code> · Maintenance guide: <code>docs/architecture_readme.md</code></footer>
+<script>
+const items={
+browser:{kind:"Client",title:"社内 Browser",text:"HTTPSでMVC画面を利用する。認証済みCookieとmutation時のanti-forgery tokenを送る。",src:["src/DxPlatform.Web/Program.cs","src/DxPlatform.Web/Views/Shared/_Layout.cshtml"]},
+actions:{kind:"Automation",title:"GitHub Actions",text:"Windowsでbuild/test/publishし、会社managed runnerからIISへ配備する。",src:[".github/workflows/ci.yml",".github/workflows/deploy-staging.yml",".github/workflows/deploy-production.yml"]},
+web:{kind:"Web",title:"MVC / Razor",text:"日本語UI、route、validation、認証/認可境界、correlation IDを提供する。",src:["src/DxPlatform.Web/Program.cs","src/DxPlatform.Web/Controllers/AppsController.cs","src/DxPlatform.Web/Views/Shared/_Layout.cshtml"]},
+identity:{kind:"Security",title:"ASP.NET Core Identity",text:"Cookie認証、password policy、lockout、固定role、無効userのsession rejectionを実装する。",src:["src/DxPlatform.Infrastructure/DependencyInjection.cs","src/DxPlatform.Web/Program.cs","src/DxPlatform.Infrastructure/Identity/ApplicationIdentity.cs"]},
+api:{kind:"API",title:"Deployment registration API",text:"専用Bearer tokenを固定時間比較し、配備結果をJSONで登録する。secretらしいnotesは拒否する。",src:["src/DxPlatform.Web/Controllers/DeploymentApiController.cs","tests/DxPlatform.IntegrationTests/CatalogAndOperationsTests.cs"]},
+health:{kind:"API",title:"Liveness / readiness",text:"liveはprocess応答、readyはDB queryを検査し、IIS smoke testから利用する。",src:["src/DxPlatform.Web/Program.cs","src/DxPlatform.Web/Security/DatabaseReadyHealthCheck.cs","scripts/smoke-test.ps1"]},
+permission:{kind:"Application",title:"Permission evaluator",text:"SystemAdmin、user None、user grant、group最大grant、Noneの明示順序で実効権限を決定する。",src:["src/DxPlatform.Application/Security/PermissionEvaluator.cs","src/DxPlatform.Infrastructure/Security/ApplicationAccessService.cs"]},
+validation:{kind:"Application",title:"Lifecycle / URL validation",text:"許可されたstatus transitionと、安全なabsolute http/https URLだけを受け入れる。",src:["src/DxPlatform.Application/Applications/LifecycleRules.cs","src/DxPlatform.Application/Validation/UrlSafetyValidator.cs"]},
+contracts:{kind:"Application",title:"Operational contracts",text:"audit、health、current user、asset accessの境界interfaceを定義する。",src:["src/DxPlatform.Application/Abstractions/OperationalServices.cs"]},
+domain:{kind:"Domain",title:"Asset domain",text:"Application、Data、Agent、Tool、Group、Tag、Deployment、Health、Auditと関係を表現する。",src:["src/DxPlatform.Domain/Applications/ApplicationAsset.cs","src/DxPlatform.Domain/DataAssets/DataAsset.cs","src/DxPlatform.Domain/Agents/AgentAsset.cs","src/DxPlatform.Domain/Operations/OperationalEntities.cs"]},
+ef:{kind:"Infrastructure",title:"EF Core / Identity stores",text:"共通AppDbContextをSQL ServerとSQLite providerへ接続し、migration/seedを実行する。",src:["src/DxPlatform.Infrastructure/Persistence/AppDbContext.cs","src/DxPlatform.Infrastructure/Persistence/DatabaseInitializer.cs","src/DxPlatform.Infrastructure/DependencyInjection.cs"]},
+audit:{kind:"Infrastructure",title:"Audit & health services",text:"最小限のactor/action/target/result/correlationと、bodyを含まないhealth observationを保存する。",src:["src/DxPlatform.Infrastructure/Operations/OperationalServices.cs","src/DxPlatform.Domain/Operations/OperationalEntities.cs"]},
+sql:{kind:"Database",title:"SQL Server（本番）",text:"本番必須provider。接続値はenvironment/secretから注入し、Migrationsでschemaを管理する。",src:["src/DxPlatform.Infrastructure/DependencyInjection.cs","src/DxPlatform.Infrastructure/Persistence/Migrations/20260726090428_InitialSqlServer.cs","src/DxPlatform.Infrastructure/Persistence/Migrations/20260726093846_AddIdentityAuditMetadata.cs","docs/COMPANY_COMPATIBILITY_CHECKLIST.md"]},
+sqlite:{kind:"Database",title:"SQLite（開発・test）",text:"local developmentとintegration test用。本番で選択すると起動に失敗する。",src:["src/DxPlatform.Infrastructure/DependencyInjection.cs","src/DxPlatform.Web/appsettings.Development.json","tests/DxPlatform.IntegrationTests/DxPlatformWebApplicationFactory.cs"]},
+account:{kind:"Screen",title:"Account screens",text:"login、logout、password change、access denied。",src:["src/DxPlatform.Web/Controllers/AccountController.cs","src/DxPlatform.Web/Views/Account/Login.cshtml"]},
+apps:{kind:"Screen",title:"Application catalog",text:"Read権限以上のassetを一覧/詳細表示し、launch直前にも権限とURLを再検査する。",src:["src/DxPlatform.Web/Controllers/AppsController.cs","src/DxPlatform.Web/Views/Apps/Index.cshtml"]},
+admin:{kind:"Screen",title:"Catalog and identity administration",text:"役割に応じてuser/group/grant、application/data/agent/toolを管理する。",src:["src/DxPlatform.Web/Controllers/AdminUsersController.cs","src/DxPlatform.Web/Controllers/AdminPermissionsController.cs","src/DxPlatform.Web/Controllers/AdminAppsController.cs"]},
+ops:{kind:"Screen",title:"Operations",text:"deployment history、manual health、audit log、safe settings summaryを表示する。",src:["src/DxPlatform.Web/Controllers/DeploymentsController.cs","src/DxPlatform.Web/Controllers/HealthChecksController.cs","src/DxPlatform.Web/Controllers/AuditLogsController.cs"]},
+dbmodel:{kind:"Database",title:"AppDbContext model",text:"Identity、catalog、relations、operations、tagsを単一transaction境界で保持する。",src:["src/DxPlatform.Infrastructure/Persistence/AppDbContext.cs","src/DxPlatform.Infrastructure/Persistence/Migrations/20260726090428_InitialSqlServer.cs","src/DxPlatform.Infrastructure/Persistence/Migrations/20260726093846_AddIdentityAuditMetadata.cs","docs/DATA_MODEL.md"]},
+commit:{kind:"Source",title:"Feature branch / pull request",text:"mainへ直接commitせず、CIとreviewを通して統合する。",src:[".github/workflows/ci.yml","docs/DEPLOYMENT.md"]},
+ci:{kind:"CI",title:"Windows CI",text:"restore、Release build、unit/integration test、publish、artifact uploadを実行する。",src:[".github/workflows/ci.yml"]},
+artifact:{kind:"Artifact",title:"Publish ZIP",text:"IIS配備用framework-dependent publish outputをZIPで保持する。",src:[".github/workflows/ci.yml",".github/workflows/deploy-production.yml"]},
+iis:{kind:"Hosting",title:"Windows Server / IIS",text:"配備前backup、stop、replace、start、ready smoke、失敗時rollbackを行う。会社固有値は未固定。",src:["scripts/deploy-iis.ps1","scripts/rollback-iis.ps1","docs/DEPLOYMENT.md"]},
+"deployment-record":{kind:"Operations",title:"Deployment history",text:"workflow result、commit、version、environment、log referenceを専用APIで台帳へ登録する。",src:["src/DxPlatform.Web/Controllers/DeploymentApiController.cs",".github/workflows/deploy-production.yml"]},
+staging:{kind:"CD",title:"Staging deployment",text:"enable variableで明示的に有効化したself-hosted runner workflow。",src:[".github/workflows/deploy-staging.yml"]},
+production:{kind:"CD",title:"Production deployment",text:"manual version inputとGitHub protected Environment approvalを前提とする。",src:[".github/workflows/deploy-production.yml"]},
+github:{kind:"External",title:"GitHub",text:"source control、PR、Actions、Environment secrets/variables、artifactを提供する。",src:[".github/workflows/ci.yml","docs/DEPLOYMENT.md"]},
+targets:{kind:"External",title:"Registered health targets",text:"管理roleだけが手動実行できるoutbound HTTP(S)。timeout/cooldownを適用しbodyは保存しない。",src:["src/DxPlatform.Infrastructure/Operations/OperationalServices.cs","src/DxPlatform.Web/Controllers/HealthChecksController.cs","docs/SECURITY.md"]}
+};
+function select(id){const x=items[id];if(!x)return;document.querySelectorAll('[data-id]').forEach(n=>n.classList.toggle('selected',n.dataset.id===id));document.getElementById('detail').innerHTML=`<span class="kind">${x.kind}</span><h3>${x.title}</h3><p>${x.text}</p><b>Source evidence</b><ul class="sources">${x.src.map(s=>`<li>${s}</li>`).join('')}</ul>`}
+document.querySelectorAll('[data-id]').forEach(n=>n.addEventListener('click',()=>select(n.dataset.id)));
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{document.querySelectorAll('.tab,.pane').forEach(n=>n.classList.remove('active'));t.classList.add('active');document.getElementById(t.dataset.pane).classList.add('active')}));
+</script>
+</body>
+</html>
