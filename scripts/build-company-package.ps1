@@ -9,6 +9,14 @@ param(
 
     [switch]$NoRestore,
 
+    # 検証証跡（verify-local.ps1の出力ディレクトリまたはverification.json）。省略時はartifacts/verify内で
+    # 現在のcommitに一致する最新の証跡を使う。
+    [string]$VerificationPath,
+
+    # HEADにv<Version>のtagが付いていることを必須にする（release-local.ps1が指定する）。
+    [switch]$RequireTag,
+
+    # ローカル試作用。未commit変更を許可し、検証証跡を要求しない。出力はreleasable=falseになる。
     [switch]$AllowDirtyWorkingTree
 )
 
@@ -49,6 +57,56 @@ try {
     if (-not $AllowDirtyWorkingTree -and (git status --porcelain)) {
         throw 'Working tree is dirty. Commit the exact release source before packaging, or use -AllowDirtyWorkingTree only for a local trial build.'
     }
+
+    $sourceCommit = (git rev-parse HEAD).Trim()
+    $sourceTags = @(git tag --points-at HEAD)
+    if ($RequireTag -and ($sourceTags -notcontains "v$Version")) {
+        throw "HEAD does not have the release tag v$Version. Create the tag on the verified commit first."
+    }
+
+    # --- 検証証跡（必須）: テスト、NuGet脆弱性監査、Migration差分が現在のcommitで成功していること ---
+    $verification = $null
+    $verificationDirectory = $null
+    if (-not $AllowDirtyWorkingTree) {
+        $evidenceRoot = Join-Path $repositoryRoot 'artifacts/verify'
+        if ($VerificationPath) {
+            $given = [System.IO.Path]::GetFullPath($VerificationPath)
+            $verificationDirectory = if (Test-Path -LiteralPath $given -PathType Leaf) { Split-Path -Parent $given } else { $given }
+        }
+        else {
+            $prefix = $sourceCommit.Substring(0, 8)
+            $latest = Get-ChildItem -LiteralPath $evidenceRoot -Directory -ErrorAction SilentlyContinue |
+                Where-Object Name -Like "$prefix-*" |
+                Sort-Object Name -Descending |
+                Select-Object -First 1
+            if ($null -eq $latest) {
+                throw "No verification evidence for commit $prefix. Run scripts/verify-local.ps1 first."
+            }
+            $verificationDirectory = $latest.FullName
+        }
+        $verificationFile = Join-Path $verificationDirectory 'verification.json'
+        $testSummaryFile = Join-Path $verificationDirectory 'test-summary.json'
+        foreach ($required in @($verificationFile, $testSummaryFile)) {
+            if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
+                throw "Verification evidence is incomplete: $required"
+            }
+        }
+        $verification = Get-Content -LiteralPath $verificationFile -Raw | ConvertFrom-Json
+        $problems = [System.Collections.Generic.List[string]]::new()
+        if ($verification.schemaVersion -ne 1) { $problems.Add('schemaVersion is not 1') }
+        if ($verification.sourceCommit -ne $sourceCommit) { $problems.Add("evidence commit $($verification.sourceCommit) differs from HEAD $sourceCommit") }
+        if ($verification.passed -ne $true) { $problems.Add("verification did not pass (failed step: $($verification.failedStep))") }
+        if ($verification.releasable -ne $true -or $verification.workingTreeClean -ne $true) { $problems.Add('evidence is not releasable (dirty working tree)') }
+        if ($verification.tests.executed -le 0) { $problems.Add('no tests were executed') }
+        if ($verification.tests.failed -ne 0) { $problems.Add("$($verification.tests.failed) test(s) failed") }
+        if ($verification.nugetAudit.vulnerablePackageCount -ne 0) { $problems.Add('vulnerable packages were reported') }
+        if ($verification.migrationCheck.pendingModelChanges -ne $false) { $problems.Add('migration/model diff check did not confirm "no changes"') }
+        if ($problems.Count -gt 0) {
+            throw "Verification evidence rejected: $($problems -join '; '). Re-run scripts/verify-local.ps1."
+        }
+        $verificationSha256 = (Get-FileHash -LiteralPath $verificationFile -Algorithm SHA256).Hash
+    }
+
     if (-not $NoRestore) {
         Invoke-DotNet @('restore', 'DxPlatform.slnx')
     }
@@ -106,6 +164,13 @@ try {
         Copy-Item (Join-Path 'docs' $document) (Join-Path $packageRoot 'docs')
     }
 
+    # 検証証跡を同梱する。生のTRXにはPC名・ユーザー名が含まれるため同梱せず、件数とSHA-256のみを記録する。
+    if ($null -ne $verification) {
+        New-Item -ItemType Directory -Path (Join-Path $packageRoot 'evidence') -Force | Out-Null
+        Copy-Item $verificationFile (Join-Path $packageRoot 'evidence/verification.json')
+        Copy-Item $testSummaryFile (Join-Path $packageRoot 'evidence/test-summary.json')
+    }
+
     Remove-Item (Join-Path $packageRoot 'app/appsettings.Development.json') -Force -ErrorAction SilentlyContinue
     Remove-Item (Join-Path $packageRoot 'app/appsettings.Example.json') -Force -ErrorAction SilentlyContinue
     Get-ChildItem (Join-Path $packageRoot 'app') -Filter '*.map' -File -Recurse |
@@ -115,14 +180,36 @@ try {
     $migrations = Get-ChildItem 'src/DxPlatform.Infrastructure/Persistence/Migrations' -Filter '*.cs' |
         Where-Object { $_.Name -Match '^\d{14}_.+\.cs$' -and $_.Name -NotLike '*.Designer.cs' } |
         ForEach-Object BaseName
+    $verificationSummary = $null
+    if ($null -ne $verification) {
+        $verificationSummary = [ordered]@{
+            evidenceSha256 = $verificationSha256
+            verifiedAtUtc = $verification.finishedAtUtc
+            dotnetSdkVersion = $verification.dotnetSdkVersion
+            tests = [ordered]@{
+                total = $verification.tests.total
+                passed = $verification.tests.passed
+                failed = $verification.tests.failed
+                skipped = $verification.tests.skipped
+            }
+            nugetAudit = [ordered]@{
+                mode = $verification.nugetAudit.mode
+                vulnerablePackageCount = $verification.nugetAudit.vulnerablePackageCount
+            }
+            migrationCheck = [ordered]@{ pendingModelChanges = $verification.migrationCheck.pendingModelChanges }
+        }
+    }
     $manifest = [ordered]@{
         packageVersion = $Version
         sourceCommit = $commit
+        sourceTags = @($sourceTags)
+        releasable = ($null -ne $verification)
         target = 'Windows Server / IIS / SQL Server'
         generatedAtUtc = [DateTimeOffset]::UtcNow.ToString('O')
         containsSecrets = $false
         databaseApplyMigrationsOnStartup = $false
         migrations = @($migrations)
+        verification = $verificationSummary
     }
     $manifest | ConvertTo-Json -Depth 5 |
         Set-Content -LiteralPath (Join-Path $packageRoot 'manifest.json') -Encoding utf8NoBOM
@@ -156,6 +243,52 @@ try {
     Compress-Archive -Path (Join-Path $packageRoot '*') -DestinationPath $companyZip -Force
     Copy-Item (Join-Path $packageRoot 'database/dxplatform-migrations.sql') `
         (Join-Path $releaseDirectory "dxplatform-migrations-$Version.sql")
+
+    # リリース記録: GitHubのリリースIssueとSharePointの承認記録へ転記する値。
+    # サーバー側では承認記録のZIPのSHA-256と照合する（USB内のSHA256SUMS.txtは破損検知用）。
+    $recordArtifacts = Get-ChildItem -LiteralPath $releaseDirectory -File | Sort-Object Name | ForEach-Object {
+        [ordered]@{
+            name = $_.Name
+            bytes = $_.Length
+            sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash
+        }
+    }
+    $releaseRecord = [ordered]@{
+        schemaVersion = 1
+        packageVersion = $Version
+        sourceCommit = $commit
+        sourceTags = @($sourceTags)
+        releasable = ($null -ne $verification)
+        generatedAtUtc = [DateTimeOffset]::UtcNow.ToString('O')
+        verification = $verificationSummary
+        artifacts = @($recordArtifacts)
+    }
+    $releaseRecord | ConvertTo-Json -Depth 8 |
+        Set-Content -LiteralPath (Join-Path $releaseDirectory 'release-record.json') -Encoding utf8NoBOM
+    $recordLines = [System.Collections.Generic.List[string]]::new()
+    $recordLines.Add("# リリース記録 $Version")
+    $recordLines.Add('')
+    $recordLines.Add("- バージョン: $Version")
+    $recordLines.Add("- ソースコミット: $commit")
+    $recordLines.Add("- タグ: $(if ($sourceTags.Count -gt 0) { $sourceTags -join ', ' } else { '(なし)' })")
+    $recordLines.Add("- リリース可否: $(if ($null -ne $verification) { 'releasable' } else { '試作（検証証跡なし。リリース不可）' })")
+    if ($null -ne $verificationSummary) {
+        $recordLines.Add("- テスト: $($verificationSummary.tests.passed)件成功 / $($verificationSummary.tests.failed)件失敗 / $($verificationSummary.tests.skipped)件スキップ（計$($verificationSummary.tests.total)件）")
+        $recordLines.Add("- NuGet脆弱性監査（mode=$($verificationSummary.nugetAudit.mode)）: 脆弱な依存 $($verificationSummary.nugetAudit.vulnerablePackageCount)件")
+        $recordLines.Add("- Migration差分: $(if ($verificationSummary.migrationCheck.pendingModelChanges -eq $false) { 'なし' } else { '要確認' })")
+        $recordLines.Add("- .NET SDK: $($verificationSummary.dotnetSdkVersion)")
+        $recordLines.Add("- 検証証跡(verification.json)のSHA-256: $($verificationSummary.evidenceSha256)")
+    }
+    $recordLines.Add('')
+    $recordLines.Add('| ファイル | バイト数 | SHA-256 |')
+    $recordLines.Add('|---|---|---|')
+    foreach ($artifact in $recordArtifacts) {
+        $recordLines.Add("| $($artifact.name) | $($artifact.bytes) | $($artifact.sha256) |")
+    }
+    [System.IO.File]::WriteAllLines(
+        (Join-Path $releaseDirectory 'RELEASE_RECORD.md'),
+        [string[]]$recordLines,
+        [System.Text.UTF8Encoding]::new($false))
 
     $releaseChecksums = Get-ChildItem -LiteralPath $releaseDirectory -File |
         Sort-Object Name |
