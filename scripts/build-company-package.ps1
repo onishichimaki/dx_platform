@@ -41,14 +41,6 @@ if (-not $resolvedOutput.StartsWith($repositoryPrefix, [StringComparison]::Ordin
 $releaseDirectory = Join-Path $resolvedOutput 'release'
 $workingDirectory = Join-Path $resolvedOutput "work-$Version"
 $packageRoot = Join-Path $workingDirectory "dx-platform-company-$Version"
-if (Test-Path -LiteralPath $workingDirectory) {
-    Remove-Item -LiteralPath $workingDirectory -Recurse -Force
-}
-if (Test-Path -LiteralPath $releaseDirectory) {
-    Remove-Item -LiteralPath $releaseDirectory -Recurse -Force
-}
-New-Item -ItemType Directory -Path $packageRoot, $releaseDirectory -Force | Out-Null
-
 function Invoke-DotNet {
     param([Parameter(Mandatory)][string[]]$Arguments)
     & $DotNetPath @Arguments
@@ -111,6 +103,16 @@ try {
         }
         $verificationSha256 = (Get-FileHash -LiteralPath $verificationFile -Algorithm SHA256).Hash
     }
+
+    # 事前検証（clean tree、tag、検証証跡）を通過してから出力先を初期化する。
+    # 検証に失敗した試行が、前回作成済みのリリース成果物を消さないようにするため。
+    if (Test-Path -LiteralPath $workingDirectory) {
+        Remove-Item -LiteralPath $workingDirectory -Recurse -Force
+    }
+    if (Test-Path -LiteralPath $releaseDirectory) {
+        Remove-Item -LiteralPath $releaseDirectory -Recurse -Force
+    }
+    New-Item -ItemType Directory -Path $packageRoot, $releaseDirectory -Force | Out-Null
 
     if (-not $NoRestore) {
         Invoke-DotNet @('restore', 'DxPlatform.slnx')
