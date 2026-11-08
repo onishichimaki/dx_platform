@@ -38,6 +38,13 @@ public sealed class ApplicationAsset : BaseEntity
     [StringLength(2048)]
     public string? GitHubRepositoryUrl { get; set; }
 
+    // 業務資料の置き場（SharePoint等のフォルダ）とRunbook（運用手順書）へのリンク。
+    [StringLength(2048)]
+    public string? DocumentsUrl { get; set; }
+
+    [StringLength(2048)]
+    public string? RunbookUrl { get; set; }
+
     [StringLength(160)]
     public string? RuntimeEnvironment { get; set; }
 

@@ -14,7 +14,7 @@ SQLiteは`DateTimeOffset`のORDER BY制約を回避するためDevelopment/Test 
 | `ApplicationRole` | Identity role。SystemAdmin/CatalogAdmin/AppOwner/Viewer。共通監査列とIdentity concurrency stampを持つ |
 | `Group` | code unique、名称、説明、有効状態 |
 | `GroupMember` | GroupとUserの中間。`GroupId + UserId` unique |
-| `ApplicationAsset` | code unique、URL、種別、stack、責任者、環境、状態、version、health URL、機密区分等 |
+| `ApplicationAsset` | code unique、URL、種別、stack、責任者、環境、状態、version、health URL、GitHub URL、資料フォルダURL（`DocumentsUrl`）、Runbook URL（`RunbookUrl`）、機密区分等。3つのリンクはHTTP/HTTPSのみ（入力時と表示時に検査） |
 | `ApplicationPermission` | AppとUserまたはGroupの一方だけを参照。principalごとunique、None/View/Use/Manage |
 | `DataAsset` | 種別、system名、owner、更新頻度、機密区分、保持期間、接続先参照名等 |
 | `AgentAsset` | 種別、platform、用途、model参照、prompt metadata、書込/外部送信、risk、評価等 |

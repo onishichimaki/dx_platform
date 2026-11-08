@@ -27,6 +27,11 @@
             <dt class="col-sm-3">タグ</dt><dd class="col-sm-9">@(Model.TagsText ?? "-")</dd>
             <dt class="col-sm-3">備考</dt><dd class="col-sm-9">@(Model.Notes ?? "-")</dd>
         </dl></section>
+        <section class="form-section"><h2 class="h4">関連リンク</h2><dl class="row detail-list mb-0">
+            <dt class="col-sm-3">GitHubリポジトリ</dt><dd class="col-sm-9"><partial name="_ExternalLink" model="new ExternalLinkModel(Model.GitHubRepositoryUrl)" /></dd>
+            <dt class="col-sm-3">資料フォルダ</dt><dd class="col-sm-9"><partial name="_ExternalLink" model="new ExternalLinkModel(Model.DocumentsUrl)" /></dd>
+            <dt class="col-sm-3">Runbook</dt><dd class="col-sm-9"><partial name="_ExternalLink" model="new ExternalLinkModel(Model.RunbookUrl)" /></dd>
+        </dl></section>
         <section class="form-section"><h2 class="h4">関連データ資産</h2><ul class="mb-0">@foreach (var item in dataAssets) { <li><a asp-controller="DataAssets" asp-action="Details" asp-route-id="@item.Id">@item.Name</a> (@item.DataType)</li> } @if (!dataAssets.Any()) { <li class="text-secondary">関連はありません。</li> }</ul></section>
     </div>
     <div class="col-lg-4">
