@@ -43,6 +43,12 @@ public sealed class ApplicationAssetInputModel : IValidatableObject
     [StringLength(2048), Display(Name = "GitHubリポジトリURL")]
     public string? GitHubRepositoryUrl { get; set; }
 
+    [StringLength(2048), Display(Name = "資料フォルダURL（SharePoint等）")]
+    public string? DocumentsUrl { get; set; }
+
+    [StringLength(2048), Display(Name = "RunbookURL（運用手順書）")]
+    public string? RunbookUrl { get; set; }
+
     [StringLength(160), Display(Name = "稼働環境")]
     public string? RuntimeEnvironment { get; set; }
 
@@ -90,6 +96,8 @@ public sealed class ApplicationAssetInputModel : IValidatableObject
         entity.OwnerUserId = string.IsNullOrWhiteSpace(OwnerUserId) ? null : OwnerUserId;
         entity.DevelopmentLead = DevelopmentLead?.Trim();
         entity.GitHubRepositoryUrl = GitHubRepositoryUrl?.Trim();
+        entity.DocumentsUrl = DocumentsUrl?.Trim();
+        entity.RunbookUrl = RunbookUrl?.Trim();
         entity.RuntimeEnvironment = RuntimeEnvironment?.Trim();
         entity.Status = Status;
         entity.Version = Version?.Trim();
@@ -114,6 +122,8 @@ public sealed class ApplicationAssetInputModel : IValidatableObject
         OwnerUserId = entity.OwnerUserId,
         DevelopmentLead = entity.DevelopmentLead,
         GitHubRepositoryUrl = entity.GitHubRepositoryUrl,
+        DocumentsUrl = entity.DocumentsUrl,
+        RunbookUrl = entity.RunbookUrl,
         RuntimeEnvironment = entity.RuntimeEnvironment,
         Status = entity.Status,
         Version = entity.Version,

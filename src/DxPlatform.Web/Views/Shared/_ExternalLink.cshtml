@@ -1,0 +1,16 @@
+@using DxPlatform.Application.Validation
+@inject IUrlSafetyValidator UrlValidator
+@model ExternalLinkModel
+@* 入力時にも検証しているが、過去に保存された値や直接のDB更新に備え、表示時にもHTTP/HTTPSの安全なURLだけをリンクにする。 *@
+@if (string.IsNullOrWhiteSpace(Model.Url))
+{
+    <span class="text-secondary">未登録</span>
+}
+else if (UrlValidator.IsSafeHttpUrl(Model.Url))
+{
+    <a href="@Model.Url" target="_blank" rel="noopener noreferrer" class="text-break">@Model.Url <span class="visually-hidden">（新しいタブ）</span></a>
+}
+else
+{
+    <span class="text-break">@Model.Url</span> <span class="text-danger">（安全なURLではないため、リンクにしていません）</span>
+}

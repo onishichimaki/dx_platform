@@ -234,6 +234,10 @@ namespace DxPlatform.Infrastructure.Persistence.Migrations
                         .HasMaxLength(160)
                         .HasColumnType("nvarchar(160)");
 
+                    b.Property<string>("DocumentsUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("nvarchar(2048)");
+
                     b.Property<string>("GitHubRepositoryUrl")
                         .HasMaxLength(2048)
                         .HasColumnType("nvarchar(2048)");
@@ -277,6 +281,10 @@ namespace DxPlatform.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(16)
                         .HasColumnType("varbinary(16)");
+
+                    b.Property<string>("RunbookUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("nvarchar(2048)");
 
                     b.Property<string>("RuntimeEnvironment")
                         .HasMaxLength(160)

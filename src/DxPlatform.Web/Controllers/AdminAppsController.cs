@@ -221,7 +221,9 @@ public sealed class AdminAppsController(
                  {
                      (model.Url, nameof(model.Url), "URL"),
                      (model.HealthCheckUrl, nameof(model.HealthCheckUrl), "ヘルスチェックURL"),
-                     (model.GitHubRepositoryUrl, nameof(model.GitHubRepositoryUrl), "GitHubリポジトリURL")
+                     (model.GitHubRepositoryUrl, nameof(model.GitHubRepositoryUrl), "GitHubリポジトリURL"),
+                     (model.DocumentsUrl, nameof(model.DocumentsUrl), "資料フォルダURL"),
+                     (model.RunbookUrl, nameof(model.RunbookUrl), "RunbookURL")
                  })
         {
             if (!urlValidator.IsSafeHttpUrl(value))
