@@ -114,6 +114,7 @@ git tag -a v0.2.0 -m "release 0.2.0"
 - `release-local.ps1`は上記の検証に成功した場合だけ`build-company-package.ps1`を実行し、ZIPを展開し直して`test-company-package.ps1`とSHA-256を再照合します。検証証跡がない、または現在のcommitと一致しない場合、`build-company-package.ps1`は成果物を作りません。
 - 出力は`artifacts/company/release/`（Git管理対象外）です。`RELEASE_RECORD.md`と`release-record.json`に、version、source commit、tag、テスト件数、監査結果、Migration差分、各ファイルのSHA-256を記録します。
 - 記録の転記先は、GitHubのリリースIssue（技術記録）とSharePointの承認記録です。社内への持込みは許可されたUSB・ウイルスチェック手順に従い、サーバー側ではZIPのSHA-256を承認記録の値と照合してから配置してください。
+- 成果物に**開発PC固有の識別子**（PC名、ユーザープロファイルのパス、リポジトリのパス）が含まれていないことを、DLL・PDBのUTF-16を含めて検査します。見つかった場合はファイル名だけを表示して失敗します（値は表示しません）。社内固有の名称など、公開リポジトリに書けない値は、環境変数`DX_RELEASE_FORBIDDEN_MARKERS`（`;`区切り）または`-ForbiddenMarker`で**外から**与えてください。ビルドは`ContinuousIntegrationBuild=true`でパスを写像し、依存関係一覧からもリポジトリのパスを取り除きます。
 - 公開（push、Release作成、アップロード）は行いません。`-AllowDirtyWorkingTree`の試作ビルドは`releasable=false`となり、`test-company-package.ps1`が警告します。
 - 固定SDKがない場合、スクリプトはリポジトリ直下の`.dotnet\dotnet.exe`を自動で使います。
 
