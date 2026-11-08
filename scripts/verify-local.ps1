@@ -104,23 +104,7 @@ function Invoke-Step {
     }
 }
 
-function Get-TrxSummary {
-    param([string]$Path)
-    [xml]$xml = Get-Content -LiteralPath $Path -Raw
-    $counters = $xml.SelectSingleNode("//*[local-name()='ResultSummary']/*[local-name()='Counters']")
-    if ($null -eq $counters) {
-        throw "TRX has no result counters: $([System.IO.Path]::GetFileName($Path))"
-    }
-    $value = { param($name) if ($null -ne $counters.$name) { [int]$counters.$name } else { 0 } }
-    $failed = (& $value 'failed') + (& $value 'error') + (& $value 'timeout') + (& $value 'aborted')
-    [ordered]@{
-        total = & $value 'total'
-        executed = & $value 'executed'
-        passed = & $value 'passed'
-        failed = $failed
-        skipped = & $value 'notExecuted'
-    }
-}
+. (Join-Path $PSScriptRoot 'lib/ReleaseCommon.ps1')
 
 Push-Location $repositoryRoot
 try {
@@ -153,6 +137,18 @@ try {
         $script:sdkVersion = $result.Output[0].Trim()
     }
 
+    Invoke-Step 'ScriptTests' {
+        # リリース用スクリプト自身の判定ロジック（証跡の検証、改ざん検出など）の回帰テスト。
+        $testScript = Join-Path $repositoryRoot 'tests/scripts/Invoke-ScriptTests.ps1'
+        $lines = @(& pwsh -NoProfile -File $testScript 2>&1 | ForEach-Object { $_.ToString() })
+        $code = $LASTEXITCODE
+        Write-Utf8File (Join-Path $logDirectory 'script-tests.log') ([string[]]$lines)
+        $summary = $lines | Where-Object { $_ -match '^(Script tests:|FAIL )' }
+        if ($code -ne 0) {
+            throw "Script tests failed. $($summary -join ' | ')"
+        }
+    }
+
     Invoke-Step 'RestoreWithNuGetAudit' {
         $result = Invoke-Native 'restore' @(
             'restore', 'DxPlatform.slnx', '--force',
@@ -168,33 +164,12 @@ try {
         $result = Invoke-Native 'vulnerable-packages' @(
             'list', 'DxPlatform.slnx', 'package', '--vulnerable', '--include-transitive', '--format', 'json')
         $text = $result.Output -join "`n"
-        $start = $text.IndexOf('{')
-        if ($result.ExitCode -ne 0 -or $start -lt 0) {
+        if ($result.ExitCode -ne 0 -or $text.IndexOf('{') -lt 0) {
             throw 'dotnet list package --vulnerable could not produce a result (vulnerability data may be unreachable).'
         }
-        $report = $text.Substring($start) | ConvertFrom-Json
-        foreach ($problem in @($report.problems)) {
-            if ($null -ne $problem) {
-                $script:auditProblems.Add("$($problem.level): $($problem.text)")
-            }
-        }
-        foreach ($project in @($report.projects)) {
-            foreach ($framework in @($project.frameworks)) {
-                foreach ($group in 'topLevelPackages', 'transitivePackages') {
-                    foreach ($package in @($framework.$group)) {
-                        if ($null -ne $package -and @($package.vulnerabilities).Count -gt 0) {
-                            $script:vulnerablePackages.Add([ordered]@{
-                                    project = [System.IO.Path]::GetFileNameWithoutExtension($project.path)
-                                    id = $package.id
-                                    resolvedVersion = $package.resolvedVersion
-                                    severities = @($package.vulnerabilities | ForEach-Object { $_.severity })
-                                    advisories = @($package.vulnerabilities | ForEach-Object { $_.advisoryurl })
-                                })
-                        }
-                    }
-                }
-            }
-        }
+        $report = Get-VulnerablePackageReport -Json $text
+        foreach ($problem in $report.Problems) { $script:auditProblems.Add($problem) }
+        foreach ($package in $report.Packages) { $script:vulnerablePackages.Add($package) }
         if ($script:auditProblems.Count -gt 0) {
             throw "Vulnerability scan reported problems: $($script:auditProblems -join '; ')"
         }

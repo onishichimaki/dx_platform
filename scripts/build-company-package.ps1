@@ -14,6 +14,10 @@ param(
     # 現在のcommitに一致する最新の証跡を使う。
     [string]$VerificationPath,
 
+    # 検証証跡の有効時間。脆弱性データベースは日々更新されるため、古い証跡は受け付けない。
+    [ValidateRange(1, 168)]
+    [int]$MaxEvidenceAgeHours = 24,
+
     # HEADにv<Version>のtagが付いていることを必須にする（release-local.ps1が指定する）。
     [switch]$RequireTag,
 
@@ -23,6 +27,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+. (Join-Path $PSScriptRoot 'lib/ReleaseCommon.ps1')
 if ([string]::IsNullOrWhiteSpace($DotNetPath)) {
     $localDotNet = Join-Path $repositoryRoot '.dotnet/dotnet.exe'
     $DotNetPath = if (Test-Path -LiteralPath $localDotNet -PathType Leaf) { $localDotNet } else { 'dotnet' }
@@ -89,15 +94,7 @@ try {
             }
         }
         $verification = Get-Content -LiteralPath $verificationFile -Raw | ConvertFrom-Json
-        $problems = [System.Collections.Generic.List[string]]::new()
-        if ($verification.schemaVersion -ne 1) { $problems.Add('schemaVersion is not 1') }
-        if ($verification.sourceCommit -ne $sourceCommit) { $problems.Add("evidence commit $($verification.sourceCommit) differs from HEAD $sourceCommit") }
-        if ($verification.passed -ne $true) { $problems.Add("verification did not pass (failed step: $($verification.failedStep))") }
-        if ($verification.releasable -ne $true -or $verification.workingTreeClean -ne $true) { $problems.Add('evidence is not releasable (dirty working tree)') }
-        if ($verification.tests.executed -le 0) { $problems.Add('no tests were executed') }
-        if ($verification.tests.failed -ne 0) { $problems.Add("$($verification.tests.failed) test(s) failed") }
-        if ($verification.nugetAudit.vulnerablePackageCount -ne 0) { $problems.Add('vulnerable packages were reported') }
-        if ($verification.migrationCheck.pendingModelChanges -ne $false) { $problems.Add('migration/model diff check did not confirm "no changes"') }
+        $problems = Test-VerificationEvidence -Evidence $verification -SourceCommit $sourceCommit -MaxAgeHours $MaxEvidenceAgeHours
         if ($problems.Count -gt 0) {
             throw "Verification evidence rejected: $($problems -join '; '). Re-run scripts/verify-local.ps1."
         }
@@ -191,7 +188,7 @@ try {
     if ($null -ne $verification) {
         $verificationSummary = [ordered]@{
             evidenceSha256 = $verificationSha256
-            verifiedAtUtc = $verification.finishedAtUtc
+            verifiedAtUtc = ([DateTimeOffset]$verification.finishedAtUtc).UtcDateTime.ToString('O')
             dotnetSdkVersion = $verification.dotnetSdkVersion
             tests = [ordered]@{
                 total = $verification.tests.total
