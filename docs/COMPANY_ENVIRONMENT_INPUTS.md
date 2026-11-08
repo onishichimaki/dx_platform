@@ -1,5 +1,7 @@
 # 会社環境で入力する値
 
+> **注記:** GitHub Actionsは使用しないため、`GitHub Variable` / `GitHub Environment Variable` / `GitHub Environment Secret` と記載された行（`IIS_*`、`PORTAL_*`、`ENABLE_STAGING_DEPLOY`、`IIS_RUNNER_LABEL`）は登録不要。値は `deploy-iis.ps1` の引数として、運用担当者が配置時に指定する。`DeploymentApi__Token` は、IIS側の秘密として設定する（デプロイ履歴の登録を運用する場合のみ）。
+
 実値をこの文書へ追記してcommitしない。値は会社のconfiguration/secret管理systemで管理する。
 
 | key | 種別 | 用途 | 保管先候補 |

@@ -1,6 +1,8 @@
 # 配置・CI/CD
 
-## CI
+## CI（現在はGitHub Actionsを使用しない）
+
+GitHub Actionsはリポジトリ設定で無効化している。検証とpackage作成は開発PCの`scripts/verify-local.ps1`と`scripts/release-local.ps1`で行い、NuGet audit（mode=all）、Release Build、全テスト、Migration差分検査、SHA-256、リリース記録（`RELEASE_RECORD.md`）を必須とする。手順は`README.md`の「ローカル検証・リリース成果物」を参照する。以降の`ci.yml`/`release.yml`/`deploy-*.yml`の記述は、workflowファイルを削除する別PRで整理するまでの旧設計であり、実行されない。
 
 `ci.yml`はpush/PRでWindows hosted Runnerを使い、NuGet audit、Release Build、Unit/Integration Test、Migration差分検査、会社用package生成、TRX/artifact保存を行う。`release.yml`はtagを同じ手順で再検証してGitHub prereleaseへchecksum付き成果物を公開する。
 

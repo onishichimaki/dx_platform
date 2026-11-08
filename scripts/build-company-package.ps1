@@ -1,3 +1,4 @@
+#Requires -Version 7.0
 [CmdletBinding()]
 param(
     [ValidatePattern('^[0-9A-Za-z][0-9A-Za-z._-]{0,63}$')]
@@ -5,15 +6,34 @@ param(
 
     [string]$OutputDirectory = 'artifacts/company',
 
-    [string]$DotNetPath = 'dotnet',
+    # 省略時は、リポジトリ直下の.dotnet\dotnet.exe（固定SDK）があればそれを、なければdotnetを使う。
+    [string]$DotNetPath,
 
     [switch]$NoRestore,
 
+    # 検証証跡（verify-local.ps1の出力ディレクトリまたはverification.json）。省略時はartifacts/verify内で
+    # 現在のcommitに一致する最新の証跡を使う。
+    [string]$VerificationPath,
+
+    # 検証証跡の有効時間。脆弱性データベースは日々更新されるため、古い証跡は受け付けない。
+    [ValidateRange(1, 168)]
+    [int]$MaxEvidenceAgeHours = 24,
+
+    # HEADにv<Version>のtagが付いていることを必須にする（release-local.ps1が指定する）。
+    [switch]$RequireTag,
+
+    # 成果物に含めてはならない追加の識別子（社内固有の名称など、公開リポジトリに書けない値）。
+    # 環境変数 DX_RELEASE_FORBIDDEN_MARKERS（; 区切り）でも指定できる。PC名・ユーザーのパス・リポジトリのパスは常に検査する。
+    [string[]]$ForbiddenMarker = @(),
+
+    # ローカル試作用。未commit変更を許可し、検証証跡を要求しない。出力はreleasable=falseになる。
     [switch]$AllowDirtyWorkingTree
 )
 
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+. (Join-Path $PSScriptRoot 'lib/ReleaseCommon.ps1')
+$DotNetPath = Resolve-DotNetPath -Requested $DotNetPath -RepositoryRoot $repositoryRoot
 $resolvedOutput = if ([System.IO.Path]::IsPathRooted($OutputDirectory)) {
     [System.IO.Path]::GetFullPath($OutputDirectory)
 }
@@ -25,17 +45,11 @@ if (-not $resolvedOutput.StartsWith($repositoryPrefix, [StringComparison]::Ordin
     throw 'OutputDirectory must be a child of the repository root.'
 }
 
-$releaseDirectory = Join-Path $resolvedOutput 'release'
+# 成果物は release.staging に作り、最後に release へ入れ替える。途中で失敗しても前回のreleaseは残る。
+$finalReleaseDirectory = Join-Path $resolvedOutput 'release'
+$releaseDirectory = Join-Path $resolvedOutput 'release.staging'
 $workingDirectory = Join-Path $resolvedOutput "work-$Version"
 $packageRoot = Join-Path $workingDirectory "dx-platform-company-$Version"
-if (Test-Path -LiteralPath $workingDirectory) {
-    Remove-Item -LiteralPath $workingDirectory -Recurse -Force
-}
-if (Test-Path -LiteralPath $releaseDirectory) {
-    Remove-Item -LiteralPath $releaseDirectory -Recurse -Force
-}
-New-Item -ItemType Directory -Path $packageRoot, $releaseDirectory -Force | Out-Null
-
 function Invoke-DotNet {
     param([Parameter(Mandatory)][string[]]$Arguments)
     & $DotNetPath @Arguments
@@ -49,12 +63,61 @@ try {
     if (-not $AllowDirtyWorkingTree -and (git status --porcelain)) {
         throw 'Working tree is dirty. Commit the exact release source before packaging, or use -AllowDirtyWorkingTree only for a local trial build.'
     }
+
+    $sourceCommit = (git rev-parse HEAD).Trim()
+    $sourceTags = @(git tag --points-at HEAD)
+    $sourceTagObject = $null
+    if ($RequireTag) {
+        $tagProblem = Get-ReleaseTagProblem -Version $Version
+        if ($tagProblem) { throw $tagProblem }
+        $sourceTagObject = (git rev-parse "refs/tags/v$Version").Trim()
+    }
+
+    # --- 検証証跡（必須）: テスト、NuGet脆弱性監査、Migration差分が現在のcommitで成功していること ---
+    $verification = $null
+    $verificationDirectory = $null
+    if (-not $AllowDirtyWorkingTree) {
+        $evidenceRoot = Join-Path $repositoryRoot 'artifacts/verify'
+        if ($VerificationPath) {
+            $given = [System.IO.Path]::GetFullPath($VerificationPath)
+            $verificationDirectory = if (Test-Path -LiteralPath $given -PathType Leaf) { Split-Path -Parent $given } else { $given }
+        }
+        else {
+            # 指定commitに対する、最新の「リリースに使える」証跡を選ぶ（後の失敗・試作の証跡に隠されない）。
+            $verificationDirectory = (Find-VerificationEvidence -EvidenceRoot $evidenceRoot `
+                    -SourceCommit $sourceCommit -MaxAgeHours $MaxEvidenceAgeHours).Directory
+        }
+        $verificationFile = Join-Path $verificationDirectory 'verification.json'
+        $testSummaryFile = Join-Path $verificationDirectory 'test-summary.json'
+        foreach ($required in @($verificationFile, $testSummaryFile)) {
+            if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
+                throw "Verification evidence is incomplete: $required"
+            }
+        }
+        $verification = Get-Content -LiteralPath $verificationFile -Raw | ConvertFrom-Json
+        $problems = Test-VerificationEvidence -Evidence $verification -SourceCommit $sourceCommit -MaxAgeHours $MaxEvidenceAgeHours
+        if ($problems.Count -gt 0) {
+            throw "Verification evidence rejected: $($problems -join '; '). Re-run scripts/verify-local.ps1."
+        }
+        $verificationSha256 = (Get-FileHash -LiteralPath $verificationFile -Algorithm SHA256).Hash
+    }
+
+    # 事前検証（clean tree、tag、検証証跡）を通過してから出力先を初期化する。
+    # 検証に失敗した試行が、前回作成済みのリリース成果物を消さないようにするため。
+    if (Test-Path -LiteralPath $workingDirectory) {
+        Remove-Item -LiteralPath $workingDirectory -Recurse -Force
+    }
+    if (Test-Path -LiteralPath $releaseDirectory) {
+        Remove-Item -LiteralPath $releaseDirectory -Recurse -Force
+    }
+    New-Item -ItemType Directory -Path $packageRoot, $releaseDirectory -Force | Out-Null
+
     if (-not $NoRestore) {
         Invoke-DotNet @('restore', 'DxPlatform.slnx')
     }
     Invoke-DotNet @(
         'publish', 'src/DxPlatform.Web/DxPlatform.Web.csproj',
-        '-c', 'Release', '--no-restore', '-o', (Join-Path $packageRoot 'app'))
+        '-c', 'Release', '--no-restore', '-p:ContinuousIntegrationBuild=true', '-o', (Join-Path $packageRoot 'app'))
     Invoke-DotNet @('tool', 'restore')
     New-Item -ItemType Directory -Path (Join-Path $packageRoot 'database') -Force | Out-Null
     Invoke-DotNet @(
@@ -68,6 +131,8 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw 'Dependency inventory generation failed.'
     }
+    # このPCの絶対パス（ユーザー名を含む）を成果物へ持ち込まないよう、リポジトリのパスを取り除いて相対パスにする。
+    $dependencyOutput = (Remove-RepositoryRootFromText -Text ($dependencyOutput -join [Environment]::NewLine) -RepositoryRoot $repositoryRoot) -split '\r?\n'
     New-Item -ItemType Directory -Path (Join-Path $packageRoot 'inventory') -Force | Out-Null
     [System.IO.File]::WriteAllLines(
         (Join-Path $packageRoot 'inventory/dotnet-dependencies.json'),
@@ -106,23 +171,53 @@ try {
         Copy-Item (Join-Path 'docs' $document) (Join-Path $packageRoot 'docs')
     }
 
+    # 検証証跡を同梱する。生のTRXにはPC名・ユーザー名が含まれるため同梱せず、件数とSHA-256のみを記録する。
+    if ($null -ne $verification) {
+        New-Item -ItemType Directory -Path (Join-Path $packageRoot 'evidence') -Force | Out-Null
+        Copy-Item $verificationFile (Join-Path $packageRoot 'evidence/verification.json')
+        Copy-Item $testSummaryFile (Join-Path $packageRoot 'evidence/test-summary.json')
+    }
+
     Remove-Item (Join-Path $packageRoot 'app/appsettings.Development.json') -Force -ErrorAction SilentlyContinue
     Remove-Item (Join-Path $packageRoot 'app/appsettings.Example.json') -Force -ErrorAction SilentlyContinue
     Get-ChildItem (Join-Path $packageRoot 'app') -Filter '*.map' -File -Recurse |
         Remove-Item -Force
 
-    $commit = (git rev-parse HEAD).Trim()
+    $commit = $sourceCommit
     $migrations = Get-ChildItem 'src/DxPlatform.Infrastructure/Persistence/Migrations' -Filter '*.cs' |
         Where-Object { $_.Name -Match '^\d{14}_.+\.cs$' -and $_.Name -NotLike '*.Designer.cs' } |
         ForEach-Object BaseName
+    $verificationSummary = $null
+    if ($null -ne $verification) {
+        $verificationSummary = [ordered]@{
+            evidenceSha256 = $verificationSha256
+            verifiedAtUtc = ([DateTimeOffset]$verification.finishedAtUtc).UtcDateTime.ToString('O')
+            dotnetSdkVersion = $verification.dotnetSdkVersion
+            tests = [ordered]@{
+                total = $verification.tests.total
+                passed = $verification.tests.passed
+                failed = $verification.tests.failed
+                skipped = $verification.tests.skipped
+            }
+            nugetAudit = [ordered]@{
+                mode = $verification.nugetAudit.mode
+                vulnerablePackageCount = $verification.nugetAudit.vulnerablePackageCount
+            }
+            migrationCheck = [ordered]@{ pendingModelChanges = $verification.migrationCheck.pendingModelChanges }
+        }
+    }
     $manifest = [ordered]@{
         packageVersion = $Version
         sourceCommit = $commit
+        sourceTags = @($sourceTags)
+        sourceTagObject = $sourceTagObject
+        releasable = ($null -ne $verification)
         target = 'Windows Server / IIS / SQL Server'
         generatedAtUtc = [DateTimeOffset]::UtcNow.ToString('O')
         containsSecrets = $false
         databaseApplyMigrationsOnStartup = $false
         migrations = @($migrations)
+        verification = $verificationSummary
     }
     $manifest | ConvertTo-Json -Depth 5 |
         Set-Content -LiteralPath (Join-Path $packageRoot 'manifest.json') -Encoding utf8NoBOM
@@ -133,10 +228,12 @@ try {
     if ($forbiddenFiles) {
         throw "Forbidden file found in package: $($forbiddenFiles.FullName -join ', ')"
     }
-    $localMachineMarker = Select-String -Path (Get-ChildItem $packageRoot -File -Recurse).FullName `
-        -Pattern 'DESKTOP-RQ3T767' -SimpleMatch -ErrorAction SilentlyContinue
-    if ($localMachineMarker) {
-        throw 'A local machine identifier was found in the package.'
+    # 開発PC固有の識別子（PC名、ユーザーのパス、リポジトリのパス、追加指定の値）が成果物に含まれていないこと。
+    # 特定のPC名は直書きしない。見つかった場合はファイル名のみを表示し、値は表示しない。
+    $markers = Get-LocalIdentifierMarkers -RepositoryRoot $repositoryRoot -Extra $ForbiddenMarker
+    $leakedFiles = Find-IdentifierLeak -Root $packageRoot -Markers $markers
+    if ($leakedFiles.Count -gt 0) {
+        throw "A local identifier (PC name, user path, repository path or a forbidden marker) was found in the package files: $($leakedFiles -join ', ')"
     }
 
     $checksumLines = Get-ChildItem -LiteralPath $packageRoot -File -Recurse |
@@ -157,6 +254,54 @@ try {
     Copy-Item (Join-Path $packageRoot 'database/dxplatform-migrations.sql') `
         (Join-Path $releaseDirectory "dxplatform-migrations-$Version.sql")
 
+    # リリース記録: GitHubのリリースIssueとSharePointの承認記録へ転記する値。
+    # サーバー側では承認記録のZIPのSHA-256と照合する（USB内のSHA256SUMS.txtは破損検知用）。
+    $recordArtifacts = Get-ChildItem -LiteralPath $releaseDirectory -File | Sort-Object Name | ForEach-Object {
+        [ordered]@{
+            name = $_.Name
+            bytes = $_.Length
+            sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash
+        }
+    }
+    $releaseRecord = [ordered]@{
+        schemaVersion = 1
+        packageVersion = $Version
+        sourceCommit = $commit
+        sourceTags = @($sourceTags)
+        sourceTagObject = $sourceTagObject
+        releasable = ($null -ne $verification)
+        generatedAtUtc = [DateTimeOffset]::UtcNow.ToString('O')
+        verification = $verificationSummary
+        artifacts = @($recordArtifacts)
+    }
+    $releaseRecord | ConvertTo-Json -Depth 8 |
+        Set-Content -LiteralPath (Join-Path $releaseDirectory 'release-record.json') -Encoding utf8NoBOM
+    $recordLines = [System.Collections.Generic.List[string]]::new()
+    $recordLines.Add("# リリース記録 $Version")
+    $recordLines.Add('')
+    $recordLines.Add("- バージョン: $Version")
+    $recordLines.Add("- ソースコミット: $commit")
+    $recordLines.Add("- タグ: $(if ($sourceTags.Count -gt 0) { $sourceTags -join ', ' } else { '(なし)' })")
+    if ($sourceTagObject) { $recordLines.Add("- タグオブジェクト: $sourceTagObject") }
+    $recordLines.Add("- リリース可否: $(if ($null -ne $verification) { 'releasable' } else { '試作（検証証跡なし。リリース不可）' })")
+    if ($null -ne $verificationSummary) {
+        $recordLines.Add("- テスト: $($verificationSummary.tests.passed)件成功 / $($verificationSummary.tests.failed)件失敗 / $($verificationSummary.tests.skipped)件スキップ（計$($verificationSummary.tests.total)件）")
+        $recordLines.Add("- NuGet脆弱性監査（mode=$($verificationSummary.nugetAudit.mode)）: 脆弱な依存 $($verificationSummary.nugetAudit.vulnerablePackageCount)件")
+        $recordLines.Add("- Migration差分: $(if ($verificationSummary.migrationCheck.pendingModelChanges -eq $false) { 'なし' } else { '要確認' })")
+        $recordLines.Add("- .NET SDK: $($verificationSummary.dotnetSdkVersion)")
+        $recordLines.Add("- 検証証跡(verification.json)のSHA-256: $($verificationSummary.evidenceSha256)")
+    }
+    $recordLines.Add('')
+    $recordLines.Add('| ファイル | バイト数 | SHA-256 |')
+    $recordLines.Add('|---|---|---|')
+    foreach ($artifact in $recordArtifacts) {
+        $recordLines.Add("| $($artifact.name) | $($artifact.bytes) | $($artifact.sha256) |")
+    }
+    [System.IO.File]::WriteAllLines(
+        (Join-Path $releaseDirectory 'RELEASE_RECORD.md'),
+        [string[]]$recordLines,
+        [System.Text.UTF8Encoding]::new($false))
+
     $releaseChecksums = Get-ChildItem -LiteralPath $releaseDirectory -File |
         Sort-Object Name |
         ForEach-Object {
@@ -167,8 +312,13 @@ try {
         [string[]]$releaseChecksums,
         [System.Text.UTF8Encoding]::new($false))
 
-    Write-Host "Company release package created: $releaseDirectory"
-    Get-ChildItem -LiteralPath $releaseDirectory -File | Select-Object Name, Length
+    # すべて成功した場合だけ、前回のreleaseを置き換える。
+    if (Test-Path -LiteralPath $finalReleaseDirectory) {
+        Remove-Item -LiteralPath $finalReleaseDirectory -Recurse -Force
+    }
+    Move-Item -LiteralPath $releaseDirectory -Destination $finalReleaseDirectory
+    Write-Host "Company release package created: $finalReleaseDirectory"
+    Get-ChildItem -LiteralPath $finalReleaseDirectory -File | Select-Object Name, Length
 }
 finally {
     Pop-Location

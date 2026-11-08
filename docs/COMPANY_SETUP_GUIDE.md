@@ -1,5 +1,8 @@
 # 会社環境構築手順（リリース候補版）
 
+> **注記（2026-11-08）:** GitHub Actions（Runner、Environment承認、Release画面からの取得）は使用しない方針で、リポジトリ設定で無効化済み。成果物は開発PCの `scripts/release-local.ps1` で作成し、`RELEASE_RECORD.md` のSHA-256をSharePointの承認記録と照合してから配置する（`README.md` の「ローカル検証・リリース成果物」を参照）。以下のGitHub Actions / Runner / Environmentに関する項目は、後続のPRでローカル手順に置き換えるまで参考情報であり、実施不要。
+
+
 この手順は、自宅で検証済みの配布ZIPを会社へ持ち込み、Windows Server / IIS / SQL Server上に安全に構築するための作業順序である。会社のセキュリティ規程、変更管理、DBA・基盤担当の指示が本書より優先される。
 
 ## 0. 配布物と責任分界
@@ -17,27 +20,26 @@
 会社でのみ確定できる範囲:
 
 - Windows Server、SQL Server、DNS、証明書、service account、Firewall、proxy
-- GitHub Organization、Runner、Environment reviewer、Secrets/Variables
+- 承認記録（変更ticket、SharePoint等）、会社管理Repositoryのreview運用（GitHub Actions、Runner、Environmentは使用しない）
 - データ分類、利用者、AppOwner、運用・監視・backup・retention
 - セキュリティ、OSS、変更管理、Production移行の正式承認
 
 ## 1. 持込み・完全性確認
 
-1. GitHub Releaseから会社端末へ配布物をdownloadする。メール添付や個人クラウドを中継しない。
-2. 会社標準のmalware scanを実行する。
-3. Release画面の `SHA256SUMS.txt` とdownloadファイルのhashを照合する。
+1. 開発PCで作成した配布物の `RELEASE_RECORD.md`（version、source commit、各fileのSHA-256、テスト・脆弱性監査・Migration差分の結果）を、承認記録（SharePoint等）へ転記し、承認を受ける。
+2. 承認後、許可されたUSBと会社標準のmalware scan手順で会社端末へ持ち込む。メール添付や個人クラウドを中継しない。
+3. 会社端末で、持ち込んだfileのSHA-256を**承認記録に記載された値**と照合する。USB内の `SHA256SUMS.txt` は破損検知用であり、承認記録の値と一致しない場合は配置しない。
 
 ```powershell
-Get-FileHash .\dx-platform-company-0.1.0-rc1.zip -Algorithm SHA256
-Get-Content .\SHA256SUMS.txt
+Get-FileHash .\dx-platform-company-<version>.zip -Algorithm SHA256
 ```
 
-4. ZIPを専用の一時folderへ展開し、package内部も検証する。
+4. ZIPを専用の一時folderへ展開し、package内部も検証する（`-RequireReleasable` で、検証証跡つきのリリース用packageであることを必須にする）。
 
 ```powershell
-Expand-Archive .\dx-platform-company-0.1.0-rc1.zip .\dx-platform-company-0.1.0-rc1
-.\dx-platform-company-0.1.0-rc1\scripts\test-company-package.ps1 `
-  -PackageRoot .\dx-platform-company-0.1.0-rc1
+Expand-Archive .\dx-platform-company-<version>.zip .\dx-platform-company-<version>
+.\dx-platform-company-<version>\scripts\test-company-package.ps1 `
+  -PackageRoot .\dx-platform-company-<version> -RequireReleasable
 ```
 
 5. `manifest.json` の `sourceCommit` が承認対象commitと一致することを確認する。
@@ -46,8 +48,8 @@ Expand-Archive .\dx-platform-company-0.1.0-rc1.zip .\dx-platform-company-0.1.0-r
 ## 2. 会社Repositoryと変更管理
 
 1. 個人Repositoryを直接Production sourceにせず、会社管理のPrivate/Internal Repositoryへ承認済みcommitを取り込む。
-2. `main` と `develop` を作り、直接push禁止、review必須、CI必須、管理者迂回禁止を設定する。
-3. `staging` / `production` Environmentを作り、Productionはrequired reviewerと許可branchを設定する。
+2. `main` と `develop` を作り、直接push禁止、review必須、ローカル検証結果（`verify-local.ps1`）のPR記載必須、管理者迂回禁止を設定する。
+3. Productionへの配置は、変更ticketと承認記録の確認後に、運用担当者が手動で実行する（GitHub Environmentは使用しない）。
 4. secret scanning、Dependabot security update、code scanning、artifact retentionを会社方針に合わせる。
 5. 会社固有値や秘密値を元のPublic Repositoryへpushしない。
 
@@ -128,7 +130,7 @@ HealthChecks__AllowPrivateAddresses=<true only for approved internal RFC1918 tar
 
 ```powershell
 .\scripts\deploy-iis.ps1 `
-  -PackagePath .\dx-platform-iis-0.1.0-rc1.zip `
+  -PackagePath .\dx-platform-iis-<version>.zip `
   -SiteName '<site-name>' `
   -AppPoolName '<app-pool-name>' `
   -DeployPath '<deploy-path>' `
@@ -153,22 +155,18 @@ HealthChecks__AllowPrivateAddresses=<true only for approved internal RFC1918 tar
 - SQL/IIS/application logにpassword、token、connection stringが出ていない
 - Browser、proxy、certificate、accessibility、性能の会社基準
 
-## 9. GitHub Actions / Runner
+## 9. GitHub Actions / Runner（使用しない）
 
-1. 専用Windows Self-hosted Runnerをinteractive user端末と分離し、service account、patch、EDR、networkを制限する。
-2. RunnerからIIS配置先だけへ必要権限を付与し、SQL管理権限は付与しない。
-3. Environment Variables/Secretsは `COMPANY_ENVIRONMENT_INPUTS.md` に従い登録する。
-4. `ENABLE_STAGING_DEPLOY=false` のままdry runし、承認後にStagingだけtrueへ変更する。
-5. Productionは手動dispatch + required reviewerを維持し、個人tokenではなく会社承認credentialを使用する。
+GitHub Actions、Self-hosted Runner、GitHub Environmentは使用しない。配置は §7 の `deploy-iis.ps1` を、運用担当者が手動で実行する。実行アカウントには、IIS配置先とbackup folderへの必要最小限の権限だけを付与し、SQL管理権限は付与しない。
 
 ## 10. 運用開始とrollback
 
-- 正式監視は外部監視で `/health/live` / `/health/ready`、IIS、SQL、certificate、disk、Runnerを監視する。
+- 正式監視は外部監視で `/health/live` / `/health/ready`、IIS、SQL、certificate、diskを監視する。
 - SQL full/differential/log backupと定期restore testを行う。
 - file rollbackは `rollback-iis.ps1`、DBは自動rollbackせずDBAがforward-fixまたはrestoreを判断する。
-- incident時はtoken/password/certificateをrotateし、Correlation ID、commit、GitHub run、IIS/SQL logを照合する。
+- incident時はtoken/password/certificateをrotateし、Correlation ID、commit、リリース記録（`RELEASE_RECORD.md`）、IIS/SQL logを照合する。
 - Production判定は `HANDOFF_TO_COMPANY.md` の全項目と会社承認が完了してから行う。
 
 ## Go / No-Go
 
-次のいずれかが未完了ならProductionへ進めない: checksum不一致、未review Migration、backup/restore未確認、HTTP公開、`AllowedHosts=*`、共用管理者、Bootstrap secret残存、branch/Environment保護なし、権限UAT失敗、監視/rollback未確認、会社セキュリティまたはOSS承認なし。
+次のいずれかが未完了ならProductionへ進めない: checksum不一致、未review Migration、backup/restore未確認、HTTP公開、`AllowedHosts=*`、共用管理者、Bootstrap secret残存、branch保護なし、権限UAT失敗、監視/rollback未確認、会社セキュリティまたはOSS承認なし。

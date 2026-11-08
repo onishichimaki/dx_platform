@@ -1,7 +1,12 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)]
-    [string]$PackageRoot
+    [string]$PackageRoot,
+
+    # 検証証跡付きのリリース用package（releasable=true）であることを必須にする。
+    # 試作package、またはreleasableの記載がないpackageは、指定時には失敗する。
+    # リリース作業（release-local.ps1）とサーバーへの配置前検証では必ず指定すること。
+    [switch]$RequireReleasable
 )
 
 $ErrorActionPreference = 'Stop'
@@ -69,6 +74,46 @@ if ($failures) {
 $manifest = Get-Content -LiteralPath (Join-Path $root 'manifest.json') -Raw | ConvertFrom-Json
 if ($manifest.containsSecrets -ne $false -or $manifest.databaseApplyMigrationsOnStartup -ne $false) {
     throw 'Package manifest does not satisfy the company safety policy.'
+}
+
+if ($manifest.releasable -eq $true) {
+    # リリース用packageは、検証証跡がmanifestと一致している必要がある。
+    $evidenceFile = Join-Path $root 'evidence/verification.json'
+    $summaryFile = Join-Path $root 'evidence/test-summary.json'
+    foreach ($evidencePath in @($evidenceFile, $summaryFile)) {
+        if (-not (Test-Path -LiteralPath $evidencePath -PathType Leaf)) {
+            throw "Releasable package is missing verification evidence: $([System.IO.Path]::GetRelativePath($root, $evidencePath))"
+        }
+    }
+    $evidence = Get-Content -LiteralPath $evidenceFile -Raw | ConvertFrom-Json
+    $evidenceProblems = @()
+    if ((Get-FileHash -LiteralPath $evidenceFile -Algorithm SHA256).Hash -ne $manifest.verification.evidenceSha256) {
+        $evidenceProblems += 'verification.json does not match manifest.verification.evidenceSha256'
+    }
+    if ($evidence.sourceCommit -ne $manifest.sourceCommit) {
+        $evidenceProblems += 'evidence commit differs from manifest sourceCommit'
+    }
+    if ($evidence.passed -ne $true -or $evidence.releasable -ne $true) {
+        $evidenceProblems += 'evidence does not record a passed, releasable verification'
+    }
+    if ($evidence.tests.executed -le 0 -or $evidence.tests.failed -ne 0) {
+        $evidenceProblems += 'evidence records no executed tests or failed tests'
+    }
+    if ($evidence.nugetAudit.vulnerablePackageCount -ne 0) {
+        $evidenceProblems += 'evidence records vulnerable packages'
+    }
+    if ($evidence.migrationCheck.pendingModelChanges -ne $false) {
+        $evidenceProblems += 'evidence does not confirm the migration/model diff check'
+    }
+    if ($evidenceProblems.Count -gt 0) {
+        throw ($evidenceProblems -join [Environment]::NewLine)
+    }
+}
+elseif ($RequireReleasable) {
+    throw 'The package is not a releasable package (manifest.releasable is not true). Build it with scripts/release-local.ps1.'
+}
+else {
+    Write-Warning 'This is a trial package (releasable=false). Do not deploy it to a company environment.'
 }
 
 Write-Host "Package validation succeeded: version $($manifest.packageVersion), commit $($manifest.sourceCommit)"
