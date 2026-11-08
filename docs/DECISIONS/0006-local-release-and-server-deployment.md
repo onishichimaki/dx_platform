@@ -34,7 +34,7 @@ GitHubはソースコード・Issue・PRの管理に限定し、GitHub Actions�
 - 次の条件を満たさない場合は成果物を作らない。
   - 未commit変更がない（既存の`build-company-package.ps1`の検査を継続）
   - HEADがリリースtagと一致する
-  - NuGet監査を`NuGetAudit=true`、`NuGetAuditMode=all`で実行し、警告がない（Node.jsは`npm audit`、基準は別途定める）
+  - NuGet監査を`NuGetAudit=true`、`NuGetAuditMode=all`、`restore --force`で必ず実行し（変更がないrestoreは監査を省略するため）、警告と脆弱な依存（推移的依存を含む）がない（Node.jsは`npm audit`、基準は別途定める）
   - Release構成のbuildとUnit/Integration testがすべて成功する
   - DxPlatformは`dotnet ef migrations has-pending-model-changes`で差分がない
 - `manifest.json`へ次を記録する（既存項目に追加）。

@@ -43,7 +43,7 @@ DxPlatformを社内Node.js業務アプリの共通開発・運用基盤として
 | G5 | Deployment API tokenが全アプリ共通で、任意アプリの履歴を登録できる。 |
 | G6 | `deploy-iis.ps1`は`DxPlatform.Web.dll`前提でNode.jsアプリに使えない。 |
 | G7 | テスト、NuGet脆弱性監査、Migration差分検査はGitHub Actions（`ci.yml`/`release.yml`）にしかなく、`build-company-package.ps1`はこれらを実行せず、テスト結果も`manifest.json`に記録しない。 |
-| G8 | 2026-11-08時点でCIのNuGet監査（`NuGetAuditMode=all`、警告をエラー扱い）が推移的依存の既知脆弱性で失敗している。ローカルの既定restoreでは検出されなかったため、ローカル手順でも同じ監査条件が必要である。依存更新は別PRで扱う。 |
+| G8 | 2026-11-08時点でNuGet監査（`NuGetAuditMode=all`、警告をエラー扱い）が推移的依存`System.Security.Cryptography.Pkcs 9.0.4`の既知脆弱性で失敗していた。変更がないときの`dotnet restore`は何も実行せず監査も走らないため検出されなかっただけで、`--force`付きのrestoreならローカルでも同じ失敗になる。ローカル手順はrestoreを必ず`--force`で実行し、`dotnet list package --vulnerable --include-transitive`も併用する。依存の修正は別PR（PR #4）で扱う。 |
 | G9 | デプロイ履歴の登録処理がworkflow内にしかなく、ローカル・社内サーバーから登録するスクリプトがない。APIに到達できない場合の保存・補完手段もない。 |
 | G10 | 自動rollback時も結果が`Failed`になり`RolledBack`が使われない。workflowの登録では`StartedAt`/`FinishedAt`がともに登録時刻になる。 |
 | G11 | Deployment APIに冪等キーがなく、再送時に履歴が重複しうる。 |
