@@ -12,6 +12,13 @@
     <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.10" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
     <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.12" />
+    <!--
+      推移的依存の脆弱性対策（Microsoft.Data.SqlClient 6.1.1 が引き込む 9.0.4 を引き上げる）。
+      GHSA-846f-f764-76mx (High) / GHSA-2fmv-rv2c-59x7 (Medium) は 9.0.21 で修正済み。
+      同じ9.xの最小の修正版に固定し、SqlClientやEF Coreのバージョンは変更しない。
+      SqlClientが修正版を依存に含む版へ更新された時点でこの固定を削除する。
+    -->
+    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="9.0.21" />
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
   </ItemGroup>
