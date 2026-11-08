@@ -108,6 +108,8 @@ git tag -a v0.2.0 -m "release 0.2.0"
 .\scripts\release-local.ps1 -Version 0.2.0
 ```
 
+- `verify-local.ps1`は最初に、リリース用スクリプト自身の回帰テスト（`tests/scripts/Invoke-ScriptTests.ps1`、外部モジュール不要、約1分）を実行します。単独でも実行できます。スクリプトを変更したときは、再現したい異常系のテストを追加してください。
+- 検証証跡は作成から24時間を過ぎると`build-company-package.ps1`が受け付けません（脆弱性データベースが日々更新されるため）。`-MaxEvidenceAgeHours`で変更できます（最大168）。
 - `verify-local.ps1`は、未commit変更、脆弱な依存（推移的依存を含む、`NuGetAuditMode=all`）、build失敗、テスト失敗・0件実行、モデルとMigrationの差分のいずれかがあれば終了コード1になります。restoreは`--force`で必ず再実行し、監査を省略させません。
 - `release-local.ps1`は上記の検証に成功した場合だけ`build-company-package.ps1`を実行し、ZIPを展開し直して`test-company-package.ps1`とSHA-256を再照合します。検証証跡がない、または現在のcommitと一致しない場合、`build-company-package.ps1`は成果物を作りません。
 - 出力は`artifacts/company/release/`（Git管理対象外）です。`RELEASE_RECORD.md`と`release-record.json`に、version、source commit、tag、テスト件数、監査結果、Migration差分、各ファイルのSHA-256を記録します。
