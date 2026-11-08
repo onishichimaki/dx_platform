@@ -226,6 +226,49 @@ try {
         Assert-True $threw 'should throw'
     }
 
+    # ===== 開発PC固有の識別子の検出（特定のPC名を直書きしない）=====
+    Test-Case 'identifiers: markers come from the current machine, not from a fixed name' {
+        $markers = Get-LocalIdentifierMarkers -RepositoryRoot 'C:\work\sample-repository'
+        Assert-True ($markers -contains $env:COMPUTERNAME) 'the current PC name is a marker'
+        Assert-True ($markers -contains 'C:/work/sample-repository') 'forward-slash variant of the repository path'
+        Assert-True ($markers -contains 'C:\\work\\sample-repository') 'JSON-escaped variant of the repository path'
+    }
+    Test-Case 'identifiers: extra markers come from the parameter and the environment variable; short values are ignored' {
+        $previous = $env:DX_RELEASE_FORBIDDEN_MARKERS
+        try {
+            $env:DX_RELEASE_FORBIDDEN_MARKERS = 'from-env-marker; ab'
+            $markers = Get-LocalIdentifierMarkers -RepositoryRoot 'C:\work\sample-repository' -Extra @('from-parameter-marker', 'xyz')
+            Assert-True ($markers -contains 'from-env-marker') 'environment variable marker'
+            Assert-True ($markers -contains 'from-parameter-marker') 'parameter marker'
+            Assert-True (-not ($markers -contains 'ab') -and -not ($markers -contains 'xyz')) 'values shorter than 4 characters are ignored'
+        }
+        finally { $env:DX_RELEASE_FORBIDDEN_MARKERS = $previous }
+    }
+    Test-Case 'identifiers: a marker in a text file or in UTF-16 binary data is found, and only file names are returned' {
+        $root = Join-Path $tempRoot 'leak-scan'
+        New-Item -ItemType Directory -Path (Join-Path $root 'app') -Force | Out-Null
+        Set-Content (Join-Path $root 'app/clean.txt') 'nothing special here' -Encoding utf8NoBOM
+        Set-Content (Join-Path $root 'app/text.json') '{"path":"C:/work/sample-repository/src/App.csproj"}' -Encoding utf8NoBOM
+        $utf16 = [System.Text.Encoding]::Unicode.GetBytes('prefix C:\work\sample-repository\obj\App.pdb suffix')
+        [System.IO.File]::WriteAllBytes((Join-Path $root 'app/App.dll'), ([byte[]]@(0x4D, 0x5A, 0x00) + $utf16))
+        $leaks = Find-IdentifierLeak -Root $root -Markers (Get-LocalIdentifierMarkers -RepositoryRoot 'C:\work\sample-repository')
+        Assert-Equal ($leaks -join ',') 'app/App.dll,app/text.json' 'leaking files (text and UTF-16 at an odd offset)'
+        Assert-True (-not (($leaks -join ' ') -match 'sample-repository')) 'the marker value must not be echoed'
+    }
+    Test-Case 'identifiers: a clean folder has no leaks' {
+        $root = Join-Path $tempRoot 'leak-scan-clean'
+        New-Item -ItemType Directory -Path $root -Force | Out-Null
+        Set-Content (Join-Path $root 'a.txt') 'generic content' -Encoding utf8NoBOM
+        $leaks = Find-IdentifierLeak -Root $root -Markers (Get-LocalIdentifierMarkers -RepositoryRoot 'C:\work\sample-repository')
+        Assert-Equal $leaks.Count 0 'no leaks expected'
+    }
+    Test-Case 'identifiers: the repository path is removed from the dependency inventory (all separator styles)' {
+        $text = '{"path":"C:/work/sample-repository/src/A/A.csproj"},{"path":"C:\\work\\sample-repository\\src\\B\\B.csproj"},{"path":"C:\work\sample-repository\src\C\C.csproj"}'
+        $clean = Remove-RepositoryRootFromText -Text $text -RepositoryRoot 'C:\work\sample-repository'
+        Assert-True (-not ($clean -match 'sample-repository')) 'repository path removed'
+        Assert-Match $clean 'src/A/A\.csproj' 'relative path kept'
+    }
+
     # ===== 脆弱性レポート解析 =====
     Test-Case 'audit: a vulnerable transitive package is reported' {
         $json = '{"version":1,"projects":[{"path":"C:\\x\\Web.csproj","frameworks":[{"framework":"net10.0","transitivePackages":[{"id":"Foo.Bar","resolvedVersion":"1.0.0","vulnerabilities":[{"severity":"High","advisoryurl":"https://example.invalid/a"}]}]}]}]}'

@@ -176,7 +176,7 @@ try {
     }
 
     Invoke-Step 'BuildRelease' {
-        $result = Invoke-Native 'build' @('build', 'DxPlatform.slnx', '-c', 'Release', '--no-restore')
+        $result = Invoke-Native 'build' @('build', 'DxPlatform.slnx', '-c', 'Release', '--no-restore', '-p:ContinuousIntegrationBuild=true')
         if ($result.ExitCode -ne 0) {
             throw "build failed (exit $($result.ExitCode)). See logs/build.log."
         }

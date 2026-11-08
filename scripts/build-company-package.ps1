@@ -22,6 +22,10 @@ param(
     # HEADにv<Version>のtagが付いていることを必須にする（release-local.ps1が指定する）。
     [switch]$RequireTag,
 
+    # 成果物に含めてはならない追加の識別子（社内固有の名称など、公開リポジトリに書けない値）。
+    # 環境変数 DX_RELEASE_FORBIDDEN_MARKERS（; 区切り）でも指定できる。PC名・ユーザーのパス・リポジトリのパスは常に検査する。
+    [string[]]$ForbiddenMarker = @(),
+
     # ローカル試作用。未commit変更を許可し、検証証跡を要求しない。出力はreleasable=falseになる。
     [switch]$AllowDirtyWorkingTree
 )
@@ -113,7 +117,7 @@ try {
     }
     Invoke-DotNet @(
         'publish', 'src/DxPlatform.Web/DxPlatform.Web.csproj',
-        '-c', 'Release', '--no-restore', '-o', (Join-Path $packageRoot 'app'))
+        '-c', 'Release', '--no-restore', '-p:ContinuousIntegrationBuild=true', '-o', (Join-Path $packageRoot 'app'))
     Invoke-DotNet @('tool', 'restore')
     New-Item -ItemType Directory -Path (Join-Path $packageRoot 'database') -Force | Out-Null
     Invoke-DotNet @(
@@ -127,6 +131,8 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw 'Dependency inventory generation failed.'
     }
+    # このPCの絶対パス（ユーザー名を含む）を成果物へ持ち込まないよう、リポジトリのパスを取り除いて相対パスにする。
+    $dependencyOutput = (Remove-RepositoryRootFromText -Text ($dependencyOutput -join [Environment]::NewLine) -RepositoryRoot $repositoryRoot) -split '\r?\n'
     New-Item -ItemType Directory -Path (Join-Path $packageRoot 'inventory') -Force | Out-Null
     [System.IO.File]::WriteAllLines(
         (Join-Path $packageRoot 'inventory/dotnet-dependencies.json'),
@@ -222,10 +228,12 @@ try {
     if ($forbiddenFiles) {
         throw "Forbidden file found in package: $($forbiddenFiles.FullName -join ', ')"
     }
-    $localMachineMarker = Select-String -Path (Get-ChildItem $packageRoot -File -Recurse).FullName `
-        -Pattern 'DESKTOP-RQ3T767' -SimpleMatch -ErrorAction SilentlyContinue
-    if ($localMachineMarker) {
-        throw 'A local machine identifier was found in the package.'
+    # 開発PC固有の識別子（PC名、ユーザーのパス、リポジトリのパス、追加指定の値）が成果物に含まれていないこと。
+    # 特定のPC名は直書きしない。見つかった場合はファイル名のみを表示し、値は表示しない。
+    $markers = Get-LocalIdentifierMarkers -RepositoryRoot $repositoryRoot -Extra $ForbiddenMarker
+    $leakedFiles = Find-IdentifierLeak -Root $packageRoot -Markers $markers
+    if ($leakedFiles.Count -gt 0) {
+        throw "A local identifier (PC name, user path, repository path or a forbidden marker) was found in the package files: $($leakedFiles -join ', ')"
     }
 
     $checksumLines = Get-ChildItem -LiteralPath $packageRoot -File -Recurse |

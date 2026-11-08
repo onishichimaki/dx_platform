@@ -7,6 +7,71 @@ $script:RequiredVerificationSteps = @(
     'WorkingTreeClean', 'DotNetSdk', 'ScriptTests', 'RestoreWithNuGetAudit', 'VulnerablePackages',
     'BuildRelease', 'Tests', 'MigrationModelDiff', 'WorkingTreeUnchanged')
 
+function Get-LocalIdentifierMarkers {
+    <#
+      成果物に含めてはならない「この開発PC固有の識別子」の一覧を返す。特定のPC名を直書きしない。
+        - 実行中のPC名、ユーザープロファイルのパス、リポジトリのパス（区切り文字の違いとJSONエスケープを含む）
+        - 追加分: -Extra と環境変数 DX_RELEASE_FORBIDDEN_MARKERS（; 区切り）。社内固有の名称など、
+          公開リポジトリに書けない値は、こちらで外部から与える
+      4文字未満の値は誤検出が多いため無視する。
+    #>
+    param([Parameter(Mandatory)][string]$RepositoryRoot, [string[]]$Extra = @())
+
+    $candidates = [System.Collections.Generic.List[string]]::new()
+    foreach ($value in @($env:COMPUTERNAME, $env:USERPROFILE, $RepositoryRoot)) {
+        if (-not [string]::IsNullOrWhiteSpace($value)) {
+            $candidates.Add($value)
+            $candidates.Add($value.Replace('\', '/'))
+            $candidates.Add($value.Replace('\', '\\'))
+        }
+    }
+    foreach ($value in @($Extra) + @($env:DX_RELEASE_FORBIDDEN_MARKERS -split ';')) {
+        if (-not [string]::IsNullOrWhiteSpace($value)) { $candidates.Add($value.Trim()) }
+    }
+    $seen = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($candidate in $candidates) {
+        if ($candidate.Length -ge 4) { $null = $seen.Add($candidate) }
+    }
+    , @($seen)
+}
+
+function Find-IdentifierLeak {
+    <#
+      フォルダ内の全ファイルを検索し、いずれかのマーカーを含むファイルの相対パスを返す。
+      テキストとしての出現に加え、.NETのDLL/PDBに埋め込まれるUTF-16の出現も検出する。
+      戻り値はファイルの相対パスのみ（マーカーの値そのものは返さず、表示もしない）。
+    #>
+    param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string[]]$Markers)
+
+    $latin1 = [System.Text.Encoding]::Latin1
+    $utf16 = [System.Text.Encoding]::Unicode
+    $leaks = [System.Collections.Generic.List[string]]::new()
+    foreach ($file in Get-ChildItem -LiteralPath $Root -File -Recurse) {
+        $bytes = [System.IO.File]::ReadAllBytes($file.FullName)
+        $views = @($latin1.GetString($bytes), $utf16.GetString($bytes))
+        if ($bytes.Length -gt 1) { $views += $utf16.GetString($bytes, 1, $bytes.Length - 1 - (($bytes.Length - 1) % 2)) }
+        $found = $false
+        foreach ($view in $views) {
+            foreach ($marker in $Markers) {
+                if ($view.IndexOf($marker, [StringComparison]::OrdinalIgnoreCase) -ge 0) { $found = $true; break }
+            }
+            if ($found) { break }
+        }
+        if ($found) { $leaks.Add([System.IO.Path]::GetRelativePath($Root, $file.FullName).Replace('\', '/')) }
+    }
+    , @($leaks | Sort-Object -Unique)
+}
+
+function Remove-RepositoryRootFromText {
+    <# テキスト中のリポジトリの絶対パス（区切り文字の違い、JSONエスケープを含む）を取り除き、相対パスにする。 #>
+    param([Parameter(Mandatory)][AllowEmptyString()][string]$Text, [Parameter(Mandatory)][string]$RepositoryRoot)
+
+    $root = $RepositoryRoot.TrimEnd('\', '/')
+    foreach ($variant in @(($root.Replace('\', '\\') + '\\'), ($root + '\'), ($root.Replace('\', '/') + '/'))) {
+        $Text = $Text.Replace($variant, '', [StringComparison]::OrdinalIgnoreCase)
+    }
+    $Text
+}
 function Resolve-DotNetPath {
     <# 指定があればそれを、なければリポジトリ直下の.dotnet\dotnet.exe（固定SDK）、なければdotnetを返す。 #>
     param([string]$Requested, [Parameter(Mandatory)][string]$RepositoryRoot)
