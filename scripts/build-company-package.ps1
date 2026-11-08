@@ -1,3 +1,4 @@
+#Requires -Version 7.0
 [CmdletBinding()]
 param(
     [ValidatePattern('^[0-9A-Za-z][0-9A-Za-z._-]{0,63}$')]
@@ -28,10 +29,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 . (Join-Path $PSScriptRoot 'lib/ReleaseCommon.ps1')
-if ([string]::IsNullOrWhiteSpace($DotNetPath)) {
-    $localDotNet = Join-Path $repositoryRoot '.dotnet/dotnet.exe'
-    $DotNetPath = if (Test-Path -LiteralPath $localDotNet -PathType Leaf) { $localDotNet } else { 'dotnet' }
-}
+$DotNetPath = Resolve-DotNetPath -Requested $DotNetPath -RepositoryRoot $repositoryRoot
 $resolvedOutput = if ([System.IO.Path]::IsPathRooted($OutputDirectory)) {
     [System.IO.Path]::GetFullPath($OutputDirectory)
 }
@@ -43,7 +41,9 @@ if (-not $resolvedOutput.StartsWith($repositoryPrefix, [StringComparison]::Ordin
     throw 'OutputDirectory must be a child of the repository root.'
 }
 
-$releaseDirectory = Join-Path $resolvedOutput 'release'
+# 成果物は release.staging に作り、最後に release へ入れ替える。途中で失敗しても前回のreleaseは残る。
+$finalReleaseDirectory = Join-Path $resolvedOutput 'release'
+$releaseDirectory = Join-Path $resolvedOutput 'release.staging'
 $workingDirectory = Join-Path $resolvedOutput "work-$Version"
 $packageRoot = Join-Path $workingDirectory "dx-platform-company-$Version"
 function Invoke-DotNet {
@@ -62,8 +62,11 @@ try {
 
     $sourceCommit = (git rev-parse HEAD).Trim()
     $sourceTags = @(git tag --points-at HEAD)
-    if ($RequireTag -and ($sourceTags -notcontains "v$Version")) {
-        throw "HEAD does not have the release tag v$Version. Create the tag on the verified commit first."
+    $sourceTagObject = $null
+    if ($RequireTag) {
+        $tagProblem = Get-ReleaseTagProblem -Version $Version
+        if ($tagProblem) { throw $tagProblem }
+        $sourceTagObject = (git rev-parse "refs/tags/v$Version").Trim()
     }
 
     # --- 検証証跡（必須）: テスト、NuGet脆弱性監査、Migration差分が現在のcommitで成功していること ---
@@ -76,15 +79,9 @@ try {
             $verificationDirectory = if (Test-Path -LiteralPath $given -PathType Leaf) { Split-Path -Parent $given } else { $given }
         }
         else {
-            $prefix = $sourceCommit.Substring(0, 8)
-            $latest = Get-ChildItem -LiteralPath $evidenceRoot -Directory -ErrorAction SilentlyContinue |
-                Where-Object Name -Like "$prefix-*" |
-                Sort-Object Name -Descending |
-                Select-Object -First 1
-            if ($null -eq $latest) {
-                throw "No verification evidence for commit $prefix. Run scripts/verify-local.ps1 first."
-            }
-            $verificationDirectory = $latest.FullName
+            # 指定commitに対する、最新の「リリースに使える」証跡を選ぶ（後の失敗・試作の証跡に隠されない）。
+            $verificationDirectory = (Find-VerificationEvidence -EvidenceRoot $evidenceRoot `
+                    -SourceCommit $sourceCommit -MaxAgeHours $MaxEvidenceAgeHours).Directory
         }
         $verificationFile = Join-Path $verificationDirectory 'verification.json'
         $testSummaryFile = Join-Path $verificationDirectory 'test-summary.json'
@@ -180,7 +177,7 @@ try {
     Get-ChildItem (Join-Path $packageRoot 'app') -Filter '*.map' -File -Recurse |
         Remove-Item -Force
 
-    $commit = (git rev-parse HEAD).Trim()
+    $commit = $sourceCommit
     $migrations = Get-ChildItem 'src/DxPlatform.Infrastructure/Persistence/Migrations' -Filter '*.cs' |
         Where-Object { $_.Name -Match '^\d{14}_.+\.cs$' -and $_.Name -NotLike '*.Designer.cs' } |
         ForEach-Object BaseName
@@ -207,6 +204,7 @@ try {
         packageVersion = $Version
         sourceCommit = $commit
         sourceTags = @($sourceTags)
+        sourceTagObject = $sourceTagObject
         releasable = ($null -ne $verification)
         target = 'Windows Server / IIS / SQL Server'
         generatedAtUtc = [DateTimeOffset]::UtcNow.ToString('O')
@@ -262,6 +260,7 @@ try {
         packageVersion = $Version
         sourceCommit = $commit
         sourceTags = @($sourceTags)
+        sourceTagObject = $sourceTagObject
         releasable = ($null -ne $verification)
         generatedAtUtc = [DateTimeOffset]::UtcNow.ToString('O')
         verification = $verificationSummary
@@ -275,6 +274,7 @@ try {
     $recordLines.Add("- バージョン: $Version")
     $recordLines.Add("- ソースコミット: $commit")
     $recordLines.Add("- タグ: $(if ($sourceTags.Count -gt 0) { $sourceTags -join ', ' } else { '(なし)' })")
+    if ($sourceTagObject) { $recordLines.Add("- タグオブジェクト: $sourceTagObject") }
     $recordLines.Add("- リリース可否: $(if ($null -ne $verification) { 'releasable' } else { '試作（検証証跡なし。リリース不可）' })")
     if ($null -ne $verificationSummary) {
         $recordLines.Add("- テスト: $($verificationSummary.tests.passed)件成功 / $($verificationSummary.tests.failed)件失敗 / $($verificationSummary.tests.skipped)件スキップ（計$($verificationSummary.tests.total)件）")
@@ -304,8 +304,13 @@ try {
         [string[]]$releaseChecksums,
         [System.Text.UTF8Encoding]::new($false))
 
-    Write-Host "Company release package created: $releaseDirectory"
-    Get-ChildItem -LiteralPath $releaseDirectory -File | Select-Object Name, Length
+    # すべて成功した場合だけ、前回のreleaseを置き換える。
+    if (Test-Path -LiteralPath $finalReleaseDirectory) {
+        Remove-Item -LiteralPath $finalReleaseDirectory -Recurse -Force
+    }
+    Move-Item -LiteralPath $releaseDirectory -Destination $finalReleaseDirectory
+    Write-Host "Company release package created: $finalReleaseDirectory"
+    Get-ChildItem -LiteralPath $finalReleaseDirectory -File | Select-Object Name, Length
 }
 finally {
     Pop-Location

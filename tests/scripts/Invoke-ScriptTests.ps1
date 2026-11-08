@@ -79,6 +79,7 @@ function New-Evidence {
         tests = [pscustomobject]@{ total = 3; executed = 3; passed = 3; failed = 0; skipped = 0 }
         nugetAudit = [pscustomobject]@{ mode = 'all'; vulnerablePackageCount = 0 }
         migrationCheck = [pscustomobject]@{ pendingModelChanges = $false }
+        steps = @($script:RequiredVerificationSteps | ForEach-Object { [pscustomobject]@{ name = $_; status = 'Passed' } })
     }
 }
 
@@ -146,13 +147,27 @@ function New-TempRepository {
     Set-Content (Join-Path $root '.gitignore') "artifacts/`n" -Encoding utf8NoBOM
     Push-Location $root
     try {
-        git init -q 2>&1 | Out-Null
-        git -c user.name=tester -c user.email=tester@example.invalid add -A 2>&1 | Out-Null
-        git -c user.name=tester -c user.email=tester@example.invalid commit -q -m init 2>&1 | Out-Null
+        Invoke-TestGit init -q
+        Invoke-TestGit add -A
+        Invoke-TestGit commit -q -m init
         $commit = (git rev-parse HEAD).Trim()
+        if ($commit -notmatch '^[0-9a-f]{40}$') { throw 'The temporary repository could not be created.' }
     }
     finally { Pop-Location }
     [pscustomobject]@{ Root = $root; Commit = $commit }
+}
+
+function Invoke-TestGit {
+    # 利用者のglobal設定（commit.gpgsign、hooks、autocrlfなど）に依存しないようにする。
+    $isolated = @('-c', 'user.name=tester', '-c', 'user.email=tester@example.invalid',
+        '-c', 'commit.gpgsign=false', '-c', 'tag.gpgsign=false', '-c', 'core.hooksPath=NUL', '-c', 'core.autocrlf=false')
+    $previous = $env:GIT_CONFIG_NOSYSTEM
+    $env:GIT_CONFIG_NOSYSTEM = '1'
+    try {
+        $output = & git @isolated @args 2>&1 | Out-String
+        if ($LASTEXITCODE -ne 0) { throw "git $($args -join ' ') failed: $output" }
+    }
+    finally { $env:GIT_CONFIG_NOSYSTEM = $previous }
 }
 
 try {
@@ -173,6 +188,10 @@ try {
         @{ Name = 'migration diff unconfirmed'; Expect = 'migration/model diff'; Edit = { param($e) $e.migrationCheck.pendingModelChanges = $null } }
         @{ Name = 'migration diff present'; Expect = 'migration/model diff'; Edit = { param($e) $e.migrationCheck.pendingModelChanges = $true } }
         @{ Name = 'unknown schema'; Expect = 'schemaVersion'; Edit = { param($e) $e.schemaVersion = 2 } }
+        @{ Name = 'weaker audit mode'; Expect = 'audit mode'; Edit = { param($e) $e.nugetAudit.mode = 'direct' } }
+        @{ Name = 'a required step is missing'; Expect = "required step 'MigrationModelDiff'"; Edit = { param($e) $e.steps = @($e.steps | Where-Object name -ne 'MigrationModelDiff') } }
+        @{ Name = 'a required step did not pass'; Expect = "required step 'ScriptTests'"; Edit = { param($e) ($e.steps | Where-Object name -eq 'ScriptTests').status = 'Failed' } }
+        @{ Name = 'no steps recorded'; Expect = 'required step'; Edit = { param($e) $e.steps = @() } }
         @{ Name = 'stale (3 days old)'; Expect = 'older than'; Edit = { param($e) $e.finishedAtUtc = [DateTimeOffset]::UtcNow.AddDays(-3).ToString('O') } }
         @{ Name = 'timestamp in the future'; Expect = 'future'; Edit = { param($e) $e.finishedAtUtc = [DateTimeOffset]::UtcNow.AddHours(3).ToString('O') } }
         @{ Name = 'timestamp missing'; Expect = 'finishedAtUtc'; Edit = { param($e) $e.finishedAtUtc = $null } }
@@ -239,11 +258,31 @@ try {
         $result = Test-Package $root
         Assert-Equal $result.ExitCode 0 "exit code. $($result.Output)"
     }
-    Test-Case 'package: a trial package is accepted with a warning' {
+    Test-Case 'package: a trial package is accepted with a warning by default' {
         $root = Join-Path $tempRoot 'pkg-trial'; New-FixturePackage $root -Releasable $false
         $result = Test-Package $root
         Assert-Equal $result.ExitCode 0 "exit code. $($result.Output)"
         Assert-Match $result.Output 'trial package' 'warning text'
+    }
+    Test-Case 'package: -RequireReleasable rejects a trial package' {
+        $root = Join-Path $tempRoot 'pkg-trial-strict'; New-FixturePackage $root -Releasable $false
+        $result = Invoke-ChildScript (Join-Path $repositoryRoot 'scripts/test-company-package.ps1') @('-PackageRoot', $root, '-RequireReleasable')
+        Assert-True ($result.ExitCode -ne 0) 'must fail'
+        Assert-Match $result.Output 'not a releasable package' 'message'
+    }
+    Test-Case 'package: -RequireReleasable rejects a manifest without the releasable flag' {
+        $root = Join-Path $tempRoot 'pkg-noflag'; New-FixturePackage $root
+        $manifestPath = Join-Path $root 'manifest.json'
+        $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
+        $manifest.PSObject.Properties.Remove('releasable')
+        Write-Json $manifestPath $manifest; Update-Checksums $root
+        $result = Invoke-ChildScript (Join-Path $repositoryRoot 'scripts/test-company-package.ps1') @('-PackageRoot', $root, '-RequireReleasable')
+        Assert-True ($result.ExitCode -ne 0) 'must fail'
+    }
+    Test-Case 'package: -RequireReleasable accepts an untouched releasable package' {
+        $root = Join-Path $tempRoot 'pkg-strict-ok'; New-FixturePackage $root
+        $result = Invoke-ChildScript (Join-Path $repositoryRoot 'scripts/test-company-package.ps1') @('-PackageRoot', $root, '-RequireReleasable')
+        Assert-Equal $result.ExitCode 0 "exit code. $($result.Output)"
     }
     Test-Case 'package: a file changed after checksums were written is rejected' {
         $root = Join-Path $tempRoot 'pkg-edit'; New-FixturePackage $root
@@ -305,6 +344,62 @@ try {
         $result = Invoke-ChildScript (Join-Path $repo.Root $packageScript) @('-Version', '1.0.0', '-NoRestore', '-RequireTag') $repo.Root
         Assert-True ($result.ExitCode -ne 0) 'must fail'
         Assert-Match $result.Output 'release tag v1\.0\.0' 'message'
+    }
+    Test-Case 'build: -RequireTag rejects a lightweight tag but accepts an annotated one' {
+        $repo = New-TempRepository 'repo-tags'
+        Push-Location $repo.Root
+        try { Invoke-TestGit tag v1.0.0 } finally { Pop-Location }
+        $result = Invoke-ChildScript (Join-Path $repo.Root $packageScript) @('-Version', '1.0.0', '-NoRestore', '-RequireTag') $repo.Root
+        Assert-True ($result.ExitCode -ne 0) 'lightweight tag must fail'
+        Assert-Match $result.Output 'annotated tag' 'message'
+        Push-Location $repo.Root
+        try { Invoke-TestGit tag -d v1.0.0; Invoke-TestGit tag -a v1.0.0 -m release } finally { Pop-Location }
+        $result = Invoke-ChildScript (Join-Path $repo.Root $packageScript) @('-Version', '1.0.0', '-NoRestore', '-RequireTag') $repo.Root
+        Assert-Match $result.Output 'No verification evidence' 'the tag check passes and the evidence check is next'
+    }
+    Test-Case 'build: a failure after the preconditions keeps the previous release output' {
+        $repo = New-TempRepository 'repo-midfail'
+        $directory = Join-Path $repo.Root "artifacts/verify/$($repo.Commit.Substring(0, 8))-20260101T000000Z"
+        $evidence = New-Evidence -Commit $repo.Commit
+        Write-Json (Join-Path $directory 'verification.json') $evidence
+        Write-Json (Join-Path $directory 'test-summary.json') $evidence.tests
+        $keep = Join-Path $repo.Root 'artifacts/company/release/keep.txt'
+        New-Item -ItemType Directory -Path (Split-Path -Parent $keep) -Force | Out-Null
+        Set-Content $keep 'previous release' -Encoding utf8NoBOM
+        # この一時リポジトリにはsrc/が無いため、publishで必ず失敗する（事前条件は通過する）。
+        $result = Invoke-ChildScript (Join-Path $repo.Root $packageScript) @('-Version', '1.0.0', '-NoRestore', '-MaxEvidenceAgeHours', '168') $repo.Root
+        Assert-True ($result.ExitCode -ne 0) 'must fail at publish'
+        Assert-True (-not ($result.Output -match 'No verification evidence|Verification evidence rejected')) "preconditions should pass. $($result.Output)"
+        Assert-True (Test-Path -LiteralPath $keep) 'previous release output must remain'
+    }
+    Test-Case 'evidence lookup: a newer failed run does not hide an older passing run' {
+        $root = Join-Path $tempRoot 'evidence-lookup'
+        $good = New-Evidence -Commit $commit
+        $bad = Copy-Object $good; $bad.passed = $false; $bad.failedStep = 'Tests'
+        foreach ($case in @(@('aaaaaaaa-20260101T000000Z', $good), @('aaaaaaaa-20260102T000000Z', $bad))) {
+            Write-Json (Join-Path $root "$($case[0])/verification.json") $case[1]
+            Write-Json (Join-Path $root "$($case[0])/test-summary.json") $case[1].tests
+        }
+        $found = Find-VerificationEvidence -EvidenceRoot $root -SourceCommit $commit
+        Assert-Match $found.Directory 'aaaaaaaa-20260101T000000Z' 'the passing run should be selected'
+    }
+    Test-Case 'evidence lookup: only failed runs raise the newest run problems' {
+        $root = Join-Path $tempRoot 'evidence-lookup-bad'
+        $bad = Copy-Object (New-Evidence -Commit $commit); $bad.passed = $false; $bad.failedStep = 'Tests'
+        Write-Json (Join-Path $root 'aaaaaaaa-20260101T000000Z/verification.json') $bad
+        Write-Json (Join-Path $root 'aaaaaaaa-20260101T000000Z/test-summary.json') $bad.tests
+        $threw = $false
+        try { Find-VerificationEvidence -EvidenceRoot $root -SourceCommit $commit | Out-Null } catch { $threw = $_.Exception.Message -match 'did not pass' }
+        Assert-True $threw 'must throw with the reason'
+    }
+    Test-Case 'dotnet path: an explicit path wins, otherwise the repository SDK, otherwise dotnet' {
+        $repo = Join-Path $tempRoot 'sdk-root'
+        New-Item -ItemType Directory -Path $repo | Out-Null
+        Assert-Equal (Resolve-DotNetPath -Requested 'custom.exe' -RepositoryRoot $repo) 'custom.exe' 'explicit'
+        Assert-Equal (Resolve-DotNetPath -Requested '' -RepositoryRoot $repo) 'dotnet' 'fallback'
+        New-Item -ItemType Directory -Path (Join-Path $repo '.dotnet') | Out-Null
+        Set-Content (Join-Path $repo '.dotnet/dotnet.exe') 'x' -Encoding utf8NoBOM
+        Assert-Match (Resolve-DotNetPath -Requested '' -RepositoryRoot $repo) '\.dotnet' 'repository SDK'
     }
     Test-Case 'build: a dirty working tree is rejected' {
         $repo = New-TempRepository 'repo-dirty'

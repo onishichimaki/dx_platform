@@ -1,7 +1,12 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)]
-    [string]$PackageRoot
+    [string]$PackageRoot,
+
+    # 検証証跡付きのリリース用package（releasable=true）であることを必須にする。
+    # 試作package、またはreleasableの記載がないpackageは、指定時には失敗する。
+    # リリース作業（release-local.ps1）とサーバーへの配置前検証では必ず指定すること。
+    [switch]$RequireReleasable
 )
 
 $ErrorActionPreference = 'Stop'
@@ -103,6 +108,9 @@ if ($manifest.releasable -eq $true) {
     if ($evidenceProblems.Count -gt 0) {
         throw ($evidenceProblems -join [Environment]::NewLine)
     }
+}
+elseif ($RequireReleasable) {
+    throw 'The package is not a releasable package (manifest.releasable is not true). Build it with scripts/release-local.ps1.'
 }
 else {
     Write-Warning 'This is a trial package (releasable=false). Do not deploy it to a company environment.'

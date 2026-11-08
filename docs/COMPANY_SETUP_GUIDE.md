@@ -1,5 +1,8 @@
 # 会社環境構築手順（リリース候補版）
 
+> **注記（2026-11-08）:** GitHub Actions（Runner、Environment承認、Release画面からの取得）は使用しない方針で、リポジトリ設定で無効化済み。成果物は開発PCの `scripts/release-local.ps1` で作成し、`RELEASE_RECORD.md` のSHA-256をSharePointの承認記録と照合してから配置する（`README.md` の「ローカル検証・リリース成果物」を参照）。以下のGitHub Actions / Runner / Environmentに関する項目は、後続のPRでローカル手順に置き換えるまで参考情報であり、実施不要。
+
+
 この手順は、自宅で検証済みの配布ZIPを会社へ持ち込み、Windows Server / IIS / SQL Server上に安全に構築するための作業順序である。会社のセキュリティ規程、変更管理、DBA・基盤担当の指示が本書より優先される。
 
 ## 0. 配布物と責任分界

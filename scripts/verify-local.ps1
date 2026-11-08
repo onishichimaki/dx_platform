@@ -14,6 +14,7 @@
   証跡は artifacts/verify/<commit8>-<UTC時刻>/ に出力する（Git管理対象外）。
   -AllowDirtyWorkingTree を指定した場合、証跡は releasable=false となり、リリースには使えない。
 #>
+#Requires -Version 7.0
 [CmdletBinding()]
 param(
     [string]$DotNetPath,
@@ -27,11 +28,8 @@ $ErrorActionPreference = 'Stop'
 $repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
 
-if ([string]::IsNullOrWhiteSpace($DotNetPath)) {
-    $localDotNet = Join-Path $repositoryRoot '.dotnet/dotnet.exe'
-    $DotNetPath = if (Test-Path -LiteralPath $localDotNet -PathType Leaf) { $localDotNet } else { 'dotnet' }
-}
-$script:DotNet = $DotNetPath
+. (Join-Path $PSScriptRoot 'lib/ReleaseCommon.ps1')
+$script:DotNet = Resolve-DotNetPath -Requested $DotNetPath -RepositoryRoot $repositoryRoot
 
 $resolvedOutput = if ([System.IO.Path]::IsPathRooted($OutputDirectory)) {
     [System.IO.Path]::GetFullPath($OutputDirectory)
@@ -103,8 +101,6 @@ function Invoke-Step {
         throw $detail
     }
 }
-
-. (Join-Path $PSScriptRoot 'lib/ReleaseCommon.ps1')
 
 Push-Location $repositoryRoot
 try {

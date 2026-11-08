@@ -13,6 +13,7 @@
   GitHubのリリースIssueとSharePointの承認記録へ転記し、承認後に許可USB手順で社内へ持ち込む。
   このスクリプトはネットワークへの公開（push、Release作成、アップロード）を行わない。
 #>
+#Requires -Version 7.0
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)]
@@ -24,6 +25,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+. (Join-Path $PSScriptRoot 'lib/ReleaseCommon.ps1')
 $extractPath = Join-Path ([System.IO.Path]::GetTempPath()) "dxplatform-release-check-$([guid]::NewGuid().ToString('N'))"
 
 function Assert-ExitCode {
@@ -35,9 +37,9 @@ function Assert-ExitCode {
 
 Push-Location $repositoryRoot
 try {
-    $tag = "v$Version"
-    if ((git tag --points-at HEAD) -notcontains $tag) {
-        throw "HEAD does not have the release tag $tag. Create it on the commit to release (git tag -a $tag -m '...') and run again."
+    $tagProblem = Get-ReleaseTagProblem -Version $Version
+    if ($tagProblem) {
+        throw $tagProblem
     }
     if (git status --porcelain) {
         throw 'Working tree is dirty. Commit the exact release source first.'
@@ -59,7 +61,7 @@ try {
 
     Write-Host '=== 3/4 test-company-package (extracted ZIP) ===' -ForegroundColor Cyan
     Expand-Archive -LiteralPath $companyZip -DestinationPath $extractPath -Force
-    & (Join-Path $PSScriptRoot 'test-company-package.ps1') -PackageRoot $extractPath
+    & (Join-Path $PSScriptRoot 'test-company-package.ps1') -PackageRoot $extractPath -RequireReleasable
     Assert-ExitCode 'test-company-package.ps1'
     $manifest = Get-Content -LiteralPath (Join-Path $extractPath 'manifest.json') -Raw | ConvertFrom-Json
     $head = (git rev-parse HEAD).Trim()
