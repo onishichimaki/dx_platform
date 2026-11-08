@@ -5,7 +5,8 @@ param(
 
     [string]$OutputDirectory = 'artifacts/company',
 
-    [string]$DotNetPath = 'dotnet',
+    # 省略時は、リポジトリ直下の.dotnet\dotnet.exe（固定SDK）があればそれを、なければdotnetを使う。
+    [string]$DotNetPath,
 
     [switch]$NoRestore,
 
@@ -22,6 +23,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+if ([string]::IsNullOrWhiteSpace($DotNetPath)) {
+    $localDotNet = Join-Path $repositoryRoot '.dotnet/dotnet.exe'
+    $DotNetPath = if (Test-Path -LiteralPath $localDotNet -PathType Leaf) { $localDotNet } else { 'dotnet' }
+}
 $resolvedOutput = if ([System.IO.Path]::IsPathRooted($OutputDirectory)) {
     [System.IO.Path]::GetFullPath($OutputDirectory)
 }
