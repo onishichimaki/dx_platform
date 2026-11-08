@@ -54,6 +54,8 @@ Repositoryには会社固有値を記録しない。実値、承認記録、担�
 
 ## 5. GitHub Actions/CD
 
+> GitHub Actionsはリポジトリ設定で無効化済みで、Runner/Environment/Secretsは使用しない。本節は無効化前の設計であり、サーバー側のデプロイはPowerShellの手動実行（`docs/COMPANY_SETUP_GUIDE.md`）、成果物の作成と検証は`scripts/release-local.ps1`で行う。本節は後続のPRでローカル手順のチェックリストへ置き換える。
+
 - [ ] Windows Self-hosted Runnerを専用account/hostへ設定する
 - [ ] Runner group/label/network/working folder/patch policyを設定する
 - [ ] IIS/URL/application asset ID等のVariablesをEnvironmentへ設定する

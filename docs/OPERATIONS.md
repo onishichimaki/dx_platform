@@ -39,6 +39,13 @@
 - file backupのretentionはdisk capacityとrelease policyに合わせて運用jobで管理する。本MVP scriptは過去backupを自動削除しない。
 - rollback後もDB schema rollbackは自動化しない。破壊的Migrationを避け、DB forward-fix/restore判断をDBAと行う。
 
+## release作成（開発PC）
+1. 対象commitをmergeし、`git tag -a v<Version>`を付ける。
+2. `.\scripts\release-local.ps1 -Version <Version>`を実行する。検証（NuGet監査、build、全テスト、Migration差分）が1つでも失敗した場合は成果物が作られないため、原因を修正して再実行する。
+3. `artifacts/company/release/RELEASE_RECORD.md`のversion、commit、テスト結果、各ファイルのSHA-256を、GitHubのリリースIssueとSharePointの承認記録へ転記する。
+4. 承認後、許可されたUSB・ウイルスチェック手順で持ち込み、サーバーではZIPのSHA-256を承認記録の値と照合してから`deploy-iis.ps1`で配置する。
+- 検証証跡（`artifacts/verify/`）と成果物はGit管理対象外。リリース後も承認記録に紐づけて保管する。
+
 ## incident/rollback
 
 1. 新release障害ならtraffic/利用を止め、GitHub runとDeployment履歴を確認。
